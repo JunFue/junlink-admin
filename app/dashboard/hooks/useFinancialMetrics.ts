@@ -4,7 +4,7 @@ import { getFinancialMetrics } from '../services/dashboardService'
 import { useDashboardStore } from '../../stores/dashboardStore'
 
 export function useFinancialMetrics() {
-  const { selectedBranch, dateRange } = useDashboardStore()
+  const { selectedBranch, dateRange, datePreset } = useDashboardStore()
   const supabase = createClient()
 
   // Use ISO strings directly from the store
@@ -15,12 +15,13 @@ export function useFinancialMetrics() {
   const isEnabled = !!selectedBranch
 
   return useQuery({
-    queryKey: ['financial-metrics', selectedBranch, startDate, endDate],
+    queryKey: ['financial-metrics', selectedBranch, startDate, endDate, datePreset],
     queryFn: () => getFinancialMetrics(
       supabase, 
       selectedBranch === 'all' ? null : selectedBranch, 
       startDate, 
-      endDate
+      endDate,
+      datePreset
     ),
     enabled: isEnabled,
   })

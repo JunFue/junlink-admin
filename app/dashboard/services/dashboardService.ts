@@ -1,30 +1,58 @@
 import { SupabaseClient } from '@supabase/supabase-js'
-import type { FinancialMetrics } from '../types'
+import type { FinancialMetrics, OverallCashFlow } from '../types'
 
-/**
- * Fetch financial metrics using the get_financial_metrics RPC
- */
+
+interface DashboardMetricsRow {
+  gross_sales: number;
+  net_profit: number;
+  transaction_count: number;
+  average_order_value: number;
+  available_cash: number;
+  total_expenses: number;
+}
+
 export async function getFinancialMetrics(
   supabase: SupabaseClient,
-  storeId: string | null,
+  storeId: string | null | undefined,
   startDate: string,
-  endDate: string
+  endDate: string,
+  datePreset?: string
 ): Promise<FinancialMetrics | null> {
-  const { data, error } = await supabase.rpc('get_financial_metrics', {
-    store_id_param: storeId,
-    start_date: startDate,
-    end_date: endDate,
-  })
+  const normalizedStoreId = (!storeId || storeId === '' || storeId === 'null') ? null : storeId;
 
-  if (error) {
-    console.error('Error fetching financial metrics:', {
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-      code: error.code
+  console.log('[dashboardService] Fetching metrics from RPC:', { normalizedStoreId, startDate, endDate, datePreset });
+
+  // Fetch everything from the updated RPC
+  const { data: metrics, error: metricsError } = await supabase
+    .rpc('get_dashboard_metrics', { 
+      p_store_id: normalizedStoreId, 
+      p_start_date: startDate, 
+      p_end_date: endDate 
     })
-    return null
+    .returns<DashboardMetricsRow[]>()
+    .maybeSingle();
+
+  if (metricsError) {
+    console.error('[dashboardService] Error calling get_dashboard_metrics:', metricsError);
+    return null;
   }
 
-  return data as FinancialMetrics
+  if (!metrics) {
+    console.log('[dashboardService] No metrics returned for:', { normalizedStoreId, startDate, endDate });
+    return null;
+  }
+
+  console.log('[dashboardService] RPC Success:', metrics);
+
+  return {
+    gross_sales: Number(metrics.gross_sales || 0),
+    net_profit: Number(metrics.net_profit || 0),
+    transaction_count: Number(metrics.transaction_count || 0),
+    average_order_value: Number(metrics.average_order_value || 0),
+    available_cash: Number(metrics.available_cash || 0),
+    total_expenses: Number(metrics.total_expenses || 0),
+    period_cash_flow: 0, // Calculated if needed, or omit
+    debug_start: startDate,
+    debug_end: endDate,
+  };
 }

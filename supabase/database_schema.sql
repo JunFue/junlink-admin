@@ -55,9 +55,12 @@ CREATE TABLE public.daily_store_stats (
   total_net_sales numeric DEFAULT 0,
   transaction_count integer DEFAULT 0,
   total_cogs numeric DEFAULT 0,
-  total_expenses numeric DEFAULT 0,
+  total_cashout numeric DEFAULT 0,
   gross_profit numeric DEFAULT 0,
   net_profit numeric DEFAULT 0,
+  total_opex numeric DEFAULT 0,
+  total_remittance numeric DEFAULT 0,
+  cash_remaining numeric DEFAULT 0,
   CONSTRAINT daily_store_stats_pkey PRIMARY KEY (id),
   CONSTRAINT daily_store_stats_store_id_fkey FOREIGN KEY (store_id) REFERENCES public.stores(store_id)
 );
@@ -73,6 +76,8 @@ CREATE TABLE public.expenses (
   source text,
   category_id uuid,
   classification_id uuid,
+  cashout_type text CHECK (cashout_type = ANY (ARRAY['COGS'::text, 'OPEX'::text, 'REMITTANCE'::text])),
+  metadata jsonb DEFAULT '{}'::jsonb,
   CONSTRAINT expenses_pkey PRIMARY KEY (id),
   CONSTRAINT expenses_classification_id_fkey FOREIGN KEY (classification_id) REFERENCES public.classification(id),
   CONSTRAINT expenses_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),

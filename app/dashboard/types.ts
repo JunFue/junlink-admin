@@ -3,6 +3,8 @@ export interface Branch {
   name: string
 }
 
+export type DatePreset = 'today' | '7d' | 'month' | 'custom' | 'single'
+
 export interface PulseStats {
   grossSales: number
   grossSalesTrend: number
@@ -61,13 +63,25 @@ export interface ActivityEvent {
   timestamp: string
 }
 
+export interface OverallCashFlow {
+  id: number
+  store_id: string
+  date: string
+  cash_in: number
+  cash_out: number
+  balance: number
+  description: string | null
+  created_at: string
+}
+
 export interface FinancialMetrics {
   gross_sales: number
-  net_sales: number
-  total_expenses: number
   net_profit: number
   transaction_count: number
   average_order_value: number
-  debug_start?: string
-  debug_end?: string
+  available_cash: number
+  total_expenses: number
+  period_cash_flow: number
+  debug_start: string
+  debug_end: string
 }

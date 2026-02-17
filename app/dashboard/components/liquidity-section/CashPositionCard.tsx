@@ -1,13 +1,12 @@
 'use client'
 
 import { useFinancialMetrics } from '../../hooks/useFinancialMetrics'
+import { useDashboardStore } from '../../../stores/dashboardStore'
 import { formatCurrency } from '@/lib/utils/formatters'
 import {
   Wallet,
   TrendingUp,
   Package,
-  Building2,
-  UserMinus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
@@ -21,16 +20,15 @@ interface BreakdownLine {
 
 export function CashPositionCard() {
   const { data: realData } = useFinancialMetrics()
+  const { datePreset } = useDashboardStore()
 
-  // Only use data from the RPC, no mock fallbacks
+  const isAvailableCashValid = datePreset === 'today' || datePreset === 'single'
+
   const data = {
-    availableCash: 0, // Not yet in RPC
+    availableCash: realData?.available_cash ?? 0,
     netProfit: realData?.net_profit ?? 0,
     totalExpenses: realData?.total_expenses ?? 0,
-    ownerDrawings: 0, // Included in totalExpenses now as per user, but kept for visual if needed?
-    // Actually the user said expenses table records EVERYTHING. 
-    // So "availableCash" would be "net_sales - total_expenses" if they want current drawer state?
-    // But let's stick to showing the total expenses as the main negative driver.
+    ownerDrawings: 0, 
   }
 
   const hasRealData = !!realData
@@ -55,16 +53,30 @@ export function CashPositionCard() {
   return (
     <div className="rounded-xl border border-border bg-card p-6">
       <div className="flex items-center gap-3 mb-6">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success/10">
-          <Wallet className="h-5 w-5 text-success" />
+        <div className={cn(
+          "flex h-10 w-10 items-center justify-center rounded-xl",
+          isAvailableCashValid ? "bg-success/10" : "bg-muted"
+        )}>
+          <Wallet className={cn("h-5 w-5", isAvailableCashValid ? "text-success" : "text-muted-foreground")} />
         </div>
         <div>
           <h3 className="text-sm font-medium text-muted-foreground">
             Available Cash
           </h3>
-          <p className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
-            {formatCurrency(data.availableCash)}
-          </p>
+          {isAvailableCashValid ? (
+            <p className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
+              {formatCurrency(data.availableCash)}
+            </p>
+          ) : (
+            <div>
+              <p className="text-2xl sm:text-3xl font-bold text-muted-foreground/50 tracking-tight">
+                N/A
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                (Today/History only)
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

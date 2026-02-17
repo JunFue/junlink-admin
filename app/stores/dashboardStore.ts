@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { startOfDay, endOfDay, subDays, startOfMonth, format } from 'date-fns'
-
-export type DatePreset = 'today' | '7d' | 'month' | 'custom' | 'single'
+import type { DatePreset } from '../dashboard/types'
+export type { DatePreset }
 
 interface DateRange {
   from: string // YYYY-MM-DD for consistency and avoiding UTC shifts
