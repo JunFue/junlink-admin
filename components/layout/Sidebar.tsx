@@ -30,20 +30,28 @@ export function Sidebar() {
   const { sidebarCollapsed, toggleSidebar } = useUIStore()
 
   return (
-    <aside 
-      className={cn(
-        'fixed left-0 top-0 z-40 h-screen border-r border-sidebar-border bg-sidebar transition-all duration-300 ease-in-out',
-        sidebarCollapsed ? 'w-20' : 'w-64'
+    <>
+      {/* Backdrop for mobile when sidebar is open */}
+      {!sidebarCollapsed && (
+        <div 
+          className="fixed inset-0 z-30 bg-background/50 backdrop-blur-sm transition-opacity lg:hidden"
+          onClick={toggleSidebar}
+        />
       )}
-    >
-      {/* Logo */}
-      <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
-        <Link href="/dashboard" className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl">
-            <Logo className="h-10 w-10 text-primary" />
+
+      <aside 
+        className={cn(
+          'fixed left-0 top-0 z-40 h-screen border-r border-sidebar-border bg-sidebar transition-all duration-300 ease-in-out',
+          sidebarCollapsed ? 'w-12 lg:w-20' : 'w-64'
+        )}
+      >
+      <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-3 lg:px-4">
+        <Link href="/dashboard" className="flex items-center gap-2 lg:gap-3">
+          <div className="flex h-8 w-8 lg:h-10 lg:w-10 items-center justify-center rounded-xl">
+            <Logo className="h-8 w-8 lg:h-10 lg:w-10 text-primary" />
           </div>
           {!sidebarCollapsed && (
-            <span className="text-lg font-semibold text-foreground animate-fade-in">
+            <span className="text-lg font-semibold text-foreground animate-fade-in truncate">
               JunLink
             </span>
           )}
@@ -61,11 +69,11 @@ export function Sidebar() {
               key={item.name}
               href={item.href}
               className={cn(
-                'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                'group flex items-center gap-3 rounded-lg px-2 lg:px-3 py-2.5 text-sm font-medium transition-all duration-200',
                 isActive
                   ? 'bg-primary text-primary-foreground shadow-md'
                   : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground',
-                sidebarCollapsed && 'justify-center px-2'
+                sidebarCollapsed && 'justify-center lg:px-2'
               )}
               title={sidebarCollapsed ? item.name : undefined}
             >
@@ -84,7 +92,10 @@ export function Sidebar() {
       {/* Collapse Toggle */}
       <button
         onClick={toggleSidebar}
-        className="absolute -right-3 top-20 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card shadow-md transition-colors hover:bg-accent"
+        className={cn(
+          "absolute -right-3 top-20 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card shadow-md transition-colors hover:bg-accent z-50",
+          sidebarCollapsed && "lg:-right-3"
+        )}
       >
         {sidebarCollapsed ? (
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -93,5 +104,6 @@ export function Sidebar() {
         )}
       </button>
     </aside>
+    </>
   )
 }

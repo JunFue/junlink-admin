@@ -25,10 +25,7 @@ export function AppShell({
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
-      <div className={cn(
-        'transition-all duration-300 ease-in-out',
-        sidebarCollapsed ? 'ml-20' : 'ml-64'
-      )}>
+      <div className="flex-1 pl-12 lg:pl-20">
         <TopBar />
         <main className="p-6">
           {children}

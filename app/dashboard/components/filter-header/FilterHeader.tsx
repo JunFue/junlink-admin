@@ -55,16 +55,16 @@ export function FilterHeader() {
   const toDate = new Date(dateRange.to)
 
   return (
-    <div className="sticky top-0 z-30 -mx-6 -mt-6 mb-2 bg-background/80 backdrop-blur-lg border-b border-border px-6 py-4">
+    <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 mb-2 bg-background/80 backdrop-blur-lg border-b border-border px-4 sm:px-6 py-3 sm:py-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         {/* Title */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-            <SlidersHorizontal className="h-5 w-5 text-primary" />
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-primary/10">
+            <SlidersHorizontal className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-foreground">Overview</h1>
-            <p className="text-xs text-muted-foreground">
+            <h1 className="text-lg sm:text-xl font-bold text-foreground">Overview</h1>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
               {format(fromDate, 'MMM d, yyyy')}
               {dateRange.from !== dateRange.to &&
                 ` — ${format(toDate, 'MMM d, yyyy')}`}
@@ -73,16 +73,16 @@ export function FilterHeader() {
         </div>
 
         {/* Controls */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Branch Selector */}
           <div className="relative" ref={branchRef}>
             <button
               type="button"
               onClick={() => setBranchOpen(!branchOpen)}
-              className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+              className="flex items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5 sm:px-3 sm:py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
             >
-              <span className="max-w-[140px] truncate">{branchLabel}</span>
-              <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', branchOpen && 'rotate-180')} />
+              <span className="max-w-[100px] sm:max-w-[140px] truncate">{branchLabel}</span>
+              <ChevronDown className={cn('h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground transition-transform', branchOpen && 'rotate-180')} />
             </button>
 
             {branchOpen && (
@@ -120,7 +120,7 @@ export function FilterHeader() {
                   setCustomOpen(false)
                 }}
                 className={cn(
-                  'px-3 py-1.5 text-sm font-medium rounded-md transition-all',
+                  'px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all',
                   datePreset === p.key
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent'
@@ -132,21 +132,22 @@ export function FilterHeader() {
 
             {/* Custom Range Trigger */}
             <div className="relative" ref={customRef}>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5 sm:gap-1">
                 <button
                   type="button"
                   onClick={() => {
                     setCustomOpen(customOpen === 'single' ? false : 'single')
                   }}
                   className={cn(
-                    'flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md transition-all',
+                    'flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all',
                     datePreset === 'single'
                       ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                   )}
                 >
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  History
+                  <CalendarDays className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                  <span className="hidden xs:inline">History</span>
+                  <span className="xs:hidden">H</span>
                 </button>
                 <button
                   type="button"
@@ -154,19 +155,20 @@ export function FilterHeader() {
                     setCustomOpen(customOpen === 'range' ? false : 'range')
                   }}
                   className={cn(
-                    'flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md transition-all',
+                    'flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all',
                     datePreset === 'custom'
                       ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                   )}
                 >
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  Range
+                  <CalendarDays className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                  <span className="hidden xs:inline">Range</span>
+                  <span className="xs:hidden">R</span>
                 </button>
               </div>
 
               {customOpen && (
-                <div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-lg border border-border bg-card p-4 shadow-xl animate-slide-in-up">
+                <div className="absolute right-0 top-full mt-2 z-50 w-[calc(100vw-2rem)] xs:w-72 max-w-72 rounded-lg border border-border bg-card p-4 shadow-xl animate-slide-in-up">
                   {customOpen === 'single' ? (
                     <div className="space-y-3">
                       <div>
