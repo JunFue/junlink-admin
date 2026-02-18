@@ -1,20 +1,88 @@
 import { create } from 'zustand'
-import { startOfMonth, endOfMonth } from 'date-fns'
+import { persist } from 'zustand/middleware'
+import { startOfDay, endOfDay, subDays, startOfMonth, format } from 'date-fns'
+import type { DatePreset } from '../dashboard/types'
+export type { DatePreset }
 
 interface DateRange {
-  from: Date
-  to: Date
+  from: string // YYYY-MM-DD for consistency and avoiding UTC shifts
+  to: string   // YYYY-MM-DD
 }
 
 interface DashboardState {
+  selectedBranch: string
+  datePreset: DatePreset
   dateRange: DateRange
-  setDateRange: (range: DateRange) => void
+  setBranch: (branch: string) => void
+  setPreset: (preset: DatePreset) => void
+  setCustomRange: (range: { from: Date; to: Date }, preset?: DatePreset) => void
 }
 
-export const useDashboardStore = create<DashboardState>((set) => ({
-  dateRange: {
-    from: startOfMonth(new Date()),
-    to: endOfMonth(new Date()),
-  },
-  setDateRange: (range) => set({ dateRange: range }),
-}))
+function getDateRangeForPreset(preset: DatePreset): DateRange {
+  const now = new Date()
+  let range: { from: Date; to: Date }
+  switch (preset) {
+    case 'today':
+      range = { from: startOfDay(now), to: endOfDay(now) }
+      break
+    case '7d':
+      range = { from: startOfDay(subDays(now, 6)), to: endOfDay(now) }
+      break
+    case 'month':
+      range = { from: startOfMonth(now), to: endOfDay(now) }
+      break
+    case 'single':
+      range = { from: startOfDay(now), to: endOfDay(now) }
+      break
+    default:
+      range = { from: startOfDay(now), to: endOfDay(now) }
+  }
+  return {
+    from: format(range.from, 'yyyy-MM-dd'),
+    to: format(range.to, 'yyyy-MM-dd'),
+  }
+}
+
+export const useDashboardStore = create<DashboardState>()(
+  persist(
+    (set) => ({
+      selectedBranch: 'all',
+      datePreset: 'today',
+      dateRange: getDateRangeForPreset('today'),
+
+      setBranch: (branch) => set({ selectedBranch: branch }),
+
+      setPreset: (preset) =>
+        set({
+          datePreset: preset,
+          dateRange: getDateRangeForPreset(preset),
+        }),
+
+      setCustomRange: (range, preset = 'custom') =>
+        set({
+          datePreset: preset,
+          dateRange: {
+            from: format(range.from, 'yyyy-MM-dd'),
+            to: format(range.to, 'yyyy-MM-dd'),
+          },
+        }),
+    }),
+    {
+      name: 'dashboard-storage-v4', // Hard reset to clear any stale data
+      version: 4,
+      migrate: (persistedState: any, version: number) => {
+        return persistedState
+      },
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          const isIso = (s: string, key: string) => s.includes('T')
+          if (isIso(state.dateRange.from, 'from') || isIso(state.dateRange.to, 'to')) {
+            const today = getDateRangeForPreset('today')
+            state.dateRange = today
+            state.datePreset = 'today'
+          }
+        }
+      },
+    }
+  )
+)
