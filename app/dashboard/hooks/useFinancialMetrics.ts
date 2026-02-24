@@ -24,5 +24,7 @@ export function useFinancialMetrics() {
       datePreset
     ),
     enabled: isEnabled,
+    refetchInterval: 30000, // 30 seconds
+    staleTime: 10000, // 10 seconds
   })
 }

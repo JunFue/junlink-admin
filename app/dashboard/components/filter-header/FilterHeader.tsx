@@ -4,7 +4,7 @@ import { useDashboardStore, type DatePreset } from '../../../stores/dashboardSto
 import { useStores } from '@/app/stores/hooks/useStores'
 import { useFinancialMetrics } from '../../hooks/useFinancialMetrics'
 import { format, startOfDay, endOfDay } from 'date-fns'
-import { CalendarDays, ChevronDown, SlidersHorizontal } from 'lucide-react'
+import { CalendarDays, ChevronDown, SlidersHorizontal, RefreshCw } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils/cn'
 
@@ -23,8 +23,9 @@ export function FilterHeader() {
     setPreset,
     setCustomRange,
   } = useDashboardStore()
-
+  
   const { data: stores } = useStores()
+  const { refetch, isFetching } = useFinancialMetrics()
 
   const [branchOpen, setBranchOpen] = useState(false)
   const [customOpen, setCustomOpen] = useState<'range' | 'single' | false>(false)
@@ -55,7 +56,7 @@ export function FilterHeader() {
   const toDate = new Date(dateRange.to)
 
   return (
-    <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 mb-2 bg-background/80 backdrop-blur-lg border-b border-border px-4 sm:px-6 py-3 sm:py-4">
+    <div className="sticky top-0 z-30 -mx-6 -mt-4 sm:-mt-6 mb-2 bg-background/80 backdrop-blur-lg border-b border-border px-6 py-3 sm:py-4 w-[calc(100%+3rem)]">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         {/* Title */}
         <div className="flex items-center gap-2 sm:gap-3">
@@ -74,6 +75,20 @@ export function FilterHeader() {
 
         {/* Controls */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          {/* Refresh Button */}
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className={cn(
+              "flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-all hover:bg-accent hover:text-foreground active:scale-95 disabled:opacity-50",
+              isFetching && "bg-accent"
+            )}
+            title="Refresh dashboard data"
+          >
+            <RefreshCw className={cn("h-4 w-4 sm:h-5 sm:w-5", isFetching && "animate-spin text-primary")} />
+          </button>
+
           {/* Branch Selector */}
           <div className="relative" ref={branchRef}>
             <button
@@ -86,7 +101,7 @@ export function FilterHeader() {
             </button>
 
             {branchOpen && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-card shadow-xl animate-slide-in-up">
+              <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-card shadow-xl animate-slide-in-up">
                 {allBranches.map((b) => (
                   <button
                     key={b.id}
@@ -168,7 +183,7 @@ export function FilterHeader() {
               </div>
 
               {customOpen && (
-                <div className="absolute right-0 top-full mt-2 z-50 w-[calc(100vw-2rem)] xs:w-72 max-w-72 rounded-lg border border-border bg-card p-4 shadow-xl animate-slide-in-up">
+                <div className="absolute right-0 sm:right-0 top-full mt-2 z-50 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-card p-4 shadow-xl animate-slide-in-up">
                   {customOpen === 'single' ? (
                     <div className="space-y-3">
                       <div>
