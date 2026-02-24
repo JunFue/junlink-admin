@@ -75,10 +75,18 @@ export const useDashboardStore = create<DashboardState>()(
       },
       onRehydrateStorage: () => (state) => {
         if (state) {
-          const isIso = (s: string, key: string) => s.includes('T')
-          if (isIso(state.dateRange.from, 'from') || isIso(state.dateRange.to, 'to')) {
-            const today = getDateRangeForPreset('today')
-            state.dateRange = today
+          // Always recalculate 'today', '7d', 'month', 'single' relative to current 'now'
+          // only 'custom' and potentially 'single' (if used for history) should be preserved strictly
+          // but even 'single' as described is 'History' in the UI, which uses setCustomRange.
+          // The PRESETS are Today, 7D, Month.
+          if (['today', '7d', 'month'].includes(state.datePreset)) {
+            state.dateRange = getDateRangeForPreset(state.datePreset)
+          }
+
+          // Legacy ISO fix
+          const isIso = (s: string) => s.includes('T')
+          if (isIso(state.dateRange.from) || isIso(state.dateRange.to)) {
+            state.dateRange = getDateRangeForPreset('today')
             state.datePreset = 'today'
           }
         }
