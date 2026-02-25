@@ -17,7 +17,7 @@ export function StoreCard({ store }: StoreCardProps) {
 
   // Evaluate expiration
   const hasExpiry = !!store.enrollment_code_expires_at
-  const isExpired = !hasExpiry || new Date(store.enrollment_code_expires_at) < new Date()
+  const isExpired = !store.enrollment_code_expires_at || new Date(store.enrollment_code_expires_at) < new Date()
 
   const handleRegenerate = (e: React.MouseEvent) => {
     e.preventDefault()

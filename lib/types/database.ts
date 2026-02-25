@@ -61,6 +61,7 @@ export interface Store {
   store_img: string | null;
   user_id: string;
   enrollment_id: string;
+  enrollment_code_expires_at: string | null;
   deleted_at: string | null;
 }
 

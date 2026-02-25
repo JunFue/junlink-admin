@@ -10,11 +10,16 @@ import {
 } from "@/app/stores/services/storeService";
 import { Shield, CheckSquare, Square, Save, Loader2, UserPlus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { getAdminProfiles } from "../actions";
 
-// Define a structure for Admin -> Stores map
 interface AdminAccess {
   adminId: string;
   storeIds: Set<string>;
+  userDetails?: {
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+  } | null;
 }
 
 export default function AccountAdminManager() {
@@ -59,9 +64,22 @@ export default function AccountAdminManager() {
         }
       });
 
+      const adminIds = Array.from(adminMap.keys());
+      const adminDetailsMap = new Map<string, any>();
+      
+      if (adminIds.length > 0) {
+        // Use server action to fetch co-admin details (bypassing RLS)
+        const usersData = await getAdminProfiles(adminIds);
+          
+        if (usersData && usersData.length > 0) {
+          usersData.forEach(u => adminDetailsMap.set(u.user_id, u));
+        }
+      }
+
       const adminList: AdminAccess[] = Array.from(adminMap.entries()).map(([adminId, storeIds]) => ({
         adminId,
-        storeIds
+        storeIds,
+        userDetails: adminDetailsMap.get(adminId)
       }));
       
       setAdmins(adminList);
@@ -222,11 +240,20 @@ export default function AccountAdminManager() {
                 {admins.map((admin, idx) => (
                     <div key={admin.adminId} className="bg-card border-border p-4 border rounded-xl">
                         <div className="flex justify-between items-start mb-4">
-                            <div className="flex items-center gap-2">
-                                <div className="bg-indigo-100 dark:bg-indigo-900/30 flex justify-center items-center rounded-full w-8 h-8 font-medium text-indigo-600 dark:text-indigo-400 text-xs">A</div>
+                            <div className="flex items-center gap-3">
+                                <div className="bg-indigo-100 dark:bg-indigo-900/30 flex justify-center items-center rounded-full w-10 h-10 font-medium text-indigo-600 dark:text-indigo-400 text-sm">
+                                    {admin.userDetails?.first_name ? admin.userDetails.first_name[0].toUpperCase() : 'A'}
+                                </div>
                                 <div>
-                                    <p className="font-medium text-sm">User: {admin.adminId}</p>
-                                    <p className="text-xs text-muted-foreground">Has access to {admin.storeIds.size} stores</p>
+                                    <p className="font-medium text-sm">
+                                        {admin.userDetails?.first_name || admin.userDetails?.last_name 
+                                            ? `${admin.userDetails.first_name || ''} ${admin.userDetails.last_name || ''}`.trim()
+                                            : admin.userDetails?.email || admin.adminId}
+                                    </p>
+                                    {admin.userDetails?.email && (
+                                        <p className="text-xs text-muted-foreground">{admin.userDetails.email}</p>
+                                    )}
+                                    <p className="text-xs text-muted-foreground mt-0.5">Has access to {admin.storeIds.size} stores</p>
                                 </div>
                             </div>
                             <button
