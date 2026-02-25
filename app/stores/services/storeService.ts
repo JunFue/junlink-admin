@@ -48,6 +48,7 @@ export async function getStoresWithStaffCount(supabase: SupabaseClient): Promise
   const { data: storesData, error } = await supabase
     .from('stores')
     .select('*')
+    .is('deleted_at', null)
     .order('store_name', { ascending: true })
 
   if (error) {
@@ -189,6 +190,7 @@ export async function getStoreById(supabase: SupabaseClient, storeId: string): P
     .from('stores')
     .select('*')
     .eq('store_id', storeId)
+    .is('deleted_at', null)
     .single()
 
   if (error) {
@@ -396,6 +398,7 @@ export async function getUserStores(supabase: SupabaseClient, userId: string): P
     .from('stores')
     .select('*')
     .eq('user_id', userId)
+    .is('deleted_at', null)
 
   if (error) {
     console.error('Error fetching user stores:', error)

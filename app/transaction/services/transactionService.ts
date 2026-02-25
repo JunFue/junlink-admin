@@ -59,6 +59,7 @@ export async function getStores(supabase: SupabaseClient): Promise<Store[]> {
   const { data, error } = await supabase
     .from('stores')
     .select('*')
+    .is('deleted_at', null)
     .order('store_name')
 
   if (error) throw error

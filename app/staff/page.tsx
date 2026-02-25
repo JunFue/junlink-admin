@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { Search, Users, MoreHorizontal, ArrowUpDown } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import Link from 'next/link'
+import { StaffDetailsPanel } from './components/StaffDetailsPanel'
 import type { Staff, Store } from '@/lib/types/database'
 import {
   useReactTable,
@@ -29,6 +30,9 @@ export default function StaffPage() {
   const [selectedStore, setSelectedStore] = useState<string>('')
   const [sorting, setSorting] = useState<SortingState>([])
 
+  const [selectedStaff, setSelectedStaff] = useState<StaffWithStore | null>(null)
+  const [isPanelOpen, setIsPanelOpen] = useState(false)
+
   const loading = staffLoading || storesLoading
 
   const columns = useMemo(
@@ -46,14 +50,20 @@ export default function StaffPage() {
         cell: (info) => {
           const member = info.row.original
           return (
-            <Link href={`/dashboard/staffs/${member.user_id}`} className="flex items-center gap-3 group">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground">
+            <button 
+              onClick={() => {
+                setSelectedStaff(member)
+                setIsPanelOpen(true)
+              }} 
+              className="flex items-center gap-3 group text-left"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground shrink-0">
                 {member.first_name?.charAt(0).toUpperCase() || 'S'}
               </div>
               <span className="font-medium text-foreground group-hover:text-primary transition-colors">
                 {`${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Unknown'}
               </span>
-            </Link>
+            </button>
           )
         },
       }),
@@ -211,6 +221,12 @@ export default function StaffPage() {
           </table>
         </div>
       </div>
+
+      <StaffDetailsPanel
+        staff={selectedStaff}
+        isOpen={isPanelOpen}
+        onClose={() => setIsPanelOpen(false)}
+      />
     </div>
   )
 }

@@ -69,6 +69,7 @@ export default function AnalyticsPage() {
         const { data: stores } = await supabase
           .from('stores')
           .select('store_id, store_name')
+          .is('deleted_at', null)
           .returns<Pick<Store, 'store_id' | 'store_name'>[]>()
 
         const storeRevenue: StoreData[] = []
