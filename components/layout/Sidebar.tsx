@@ -31,10 +31,10 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Backdrop for mobile when sidebar is open */}
+      {/* Backdrop for handling clicks outside when sidebar is open */}
       {!sidebarCollapsed && (
         <div 
-          className="fixed inset-0 z-30 bg-background/50 backdrop-blur-sm transition-opacity lg:hidden"
+          className="fixed inset-0 z-30 bg-background/50 backdrop-blur-sm transition-opacity"
           onClick={toggleSidebar}
         />
       )}

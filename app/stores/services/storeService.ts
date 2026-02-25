@@ -9,6 +9,7 @@ export interface Store {
   store_address: StoreAddress;
   user_id: string;
   enrollment_id?: string | null;
+  enrollment_code_expires_at?: string | null;
   store_img?: string | null;
   created_at?: string;
   deleted_at?: string | null;
@@ -267,6 +268,40 @@ export async function restoreStore(supabase: SupabaseClient, storeId: string): P
   }
 
   return data as { success: boolean; message: string }
+}
+
+/**
+ * Regenerates the enrollment code for a store.
+ * The code is 8 alphanumeric uppercase characters and valid for 1 hour.
+ */
+export async function regenerateEnrollmentCode(
+  supabase: SupabaseClient, 
+  storeId: string
+): Promise<{ success: boolean; enrollment_id: string; expires_at: string; message: string }> {
+  // Generate 8-char alphanumeric uppercase code
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  let newCode = ''
+  for (let i = 0; i < 8; i++) {
+    newCode += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+
+  // Calculate 1 hour from now
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+
+  const { error } = await supabase
+    .from('stores')
+    .update({ 
+      enrollment_id: newCode,
+      enrollment_code_expires_at: expiresAt
+    })
+    .eq('store_id', storeId)
+
+  if (error) {
+    console.error('Error regenerating code:', error)
+    return { success: false, enrollment_id: '', expires_at: '', message: error.message }
+  }
+
+  return { success: true, enrollment_id: newCode, expires_at: expiresAt, message: 'Code regenerated successfully' }
 }
 
 // Multi-Admin System RPCs

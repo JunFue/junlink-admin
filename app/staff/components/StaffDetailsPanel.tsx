@@ -1,9 +1,10 @@
-import { X, Loader2, Shield } from 'lucide-react'
+import { X, Loader2, Shield, UserMinus } from 'lucide-react'
 import { useEffect } from 'react'
 import { cn } from '@/lib/utils/cn'
 import type { StaffWithStore } from '../services/staffService'
 import { useStaffPermissions } from '../hooks/useStaffPermissions'
 import { useUpdateStaffPermissions } from '../hooks/useUpdateStaffPermissions'
+import { useRemoveStaff } from '../hooks/useRemoveStaff'
 import type { StaffPermissions } from '@/lib/types/database'
 
 interface StaffDetailsPanelProps {
@@ -26,6 +27,7 @@ const PERMISSIONS_CONFIG = [
 export function StaffDetailsPanel({ staff, onClose, isOpen }: StaffDetailsPanelProps) {
   const { data: permissions, isLoading: isLoadingPermissions } = useStaffPermissions(staff?.user_id)
   const { mutate: updatePermissions, isPending: isUpdating } = useUpdateStaffPermissions()
+  const { mutate: removeStaff, isPending: isRemoving } = useRemoveStaff()
 
   // Prevent page scrolling when panel is open
   useEffect(() => {
@@ -48,6 +50,17 @@ export function StaffDetailsPanel({ staff, onClose, isOpen }: StaffDetailsPanelP
       userId: staff.user_id,
       updates: { [key]: !currentValue },
     })
+  }
+
+  const handleRemoveStaff = () => {
+    if (!staff) return
+    if (confirm(`Are you sure you want to remove ${staff.first_name || 'this staff member'} from the store?`)) {
+      removeStaff(staff.user_id, {
+        onSuccess: () => {
+          onClose()
+        }
+      })
+    }
   }
 
   return (
@@ -92,13 +105,26 @@ export function StaffDetailsPanel({ staff, onClose, isOpen }: StaffDetailsPanelP
               </h3>
               <p className="text-sm text-muted-foreground mt-1">{staff.email || 'No email'}</p>
               
-              <div className="mt-4 flex items-center gap-2">
-                <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-                  {staff.stores?.store_name || 'Unassigned Store'}
-                </span>
-                <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent-foreground border border-accent/20">
-                  {staff.role || 'Staff'}
-                </span>
+              <div className="mt-4 flex flex-col items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                    {staff.stores?.store_name || 'Unassigned Store'}
+                  </span>
+                  <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent-foreground border border-accent/20">
+                    {staff.role || 'Staff'}
+                  </span>
+                </div>
+                
+                {staff.store_id && staff.role !== 'owner' && (
+                  <button
+                    onClick={handleRemoveStaff}
+                    disabled={isRemoving}
+                    className="flex items-center gap-2 text-destructive hover:text-destructive/80 text-sm font-medium transition-colors"
+                  >
+                    <UserMinus className="w-4 h-4" />
+                    {isRemoving ? 'Removing...' : 'Remove from Store'}
+                  </button>
+                )}
               </div>
             </div>
 

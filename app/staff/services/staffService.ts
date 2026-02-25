@@ -12,6 +12,7 @@ export async function getStaff(supabase: SupabaseClient): Promise<StaffWithStore
       *,
       stores!users_store_id_fkey (store_id, store_name)
     `)
+    .eq('role', 'member')
     .order('first_name')
     .limit(100)
 
@@ -31,4 +32,15 @@ export async function getStores(supabase: SupabaseClient): Promise<Store[]> {
 
   if (error) throw error
   return data || []
+}
+
+export async function removeStaffMember(supabase: SupabaseClient, targetStaffId: string): Promise<void> {
+  const { error } = await supabase.rpc('remove_staff_member', {
+    target_staff_id: targetStaffId
+  })
+
+  if (error) {
+    console.error('Error removing staff member:', error)
+    throw error
+  }
 }
