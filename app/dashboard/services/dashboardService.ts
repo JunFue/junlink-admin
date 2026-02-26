@@ -3,12 +3,12 @@ import type { FinancialMetrics } from '../types'
 
 interface DashboardMetricsRow {
   gross_sales: number;
+  net_sales: number;
   net_profit: number;
   transaction_count: number;
   average_order_value: number;
   available_cash: number;
   total_expenses: number;
-  total_remittance: number;
 }
 
 export async function getFinancialMetrics(
@@ -46,12 +46,13 @@ export async function getFinancialMetrics(
 
   return {
     gross_sales: Number(metrics.gross_sales || 0),
+    net_sales: Number(metrics.net_sales || 0),
     net_profit: Number(metrics.net_profit || 0),
     transaction_count: Number(metrics.transaction_count || 0),
     average_order_value: Number(metrics.average_order_value || 0),
     available_cash: Number(metrics.available_cash || 0),
     total_expenses: Number(metrics.total_expenses || 0),
-    total_remittance: Number(metrics.total_remittance || 0),
+    total_remittance: 0, 
     period_cash_flow: 0, 
     debug_start: startDate,
     debug_end: endDate,

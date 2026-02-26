@@ -19,23 +19,32 @@ interface DashboardState {
 }
 
 function getDateRangeForPreset(preset: DatePreset): DateRange {
-  const now = new Date()
+  // A bulletproof way to get "Today" in YYYY-MM-DD format strictly for the Philippines
+  const getManilaToday = () => {
+    return new Date().toLocaleDateString('en-CA', { 
+      timeZone: 'Asia/Manila' 
+    }); 
+  };
+
+  const todayStr = getManilaToday()
+  const now = new Date(todayStr) // This will be T00:00:00.000Z in most environments for YYYY-MM-DD
+  
   let range: { from: Date; to: Date }
   switch (preset) {
     case 'today':
-      range = { from: startOfDay(now), to: endOfDay(now) }
+      range = { from: now, to: now }
       break
     case '7d':
-      range = { from: startOfDay(subDays(now, 6)), to: endOfDay(now) }
+      range = { from: subDays(now, 6), to: now }
       break
     case 'month':
-      range = { from: startOfMonth(now), to: endOfDay(now) }
+      range = { from: startOfMonth(now), to: now }
       break
     case 'single':
-      range = { from: startOfDay(now), to: endOfDay(now) }
+      range = { from: now, to: now }
       break
     default:
-      range = { from: startOfDay(now), to: endOfDay(now) }
+      range = { from: now, to: now }
   }
   return {
     from: format(range.from, 'yyyy-MM-dd'),

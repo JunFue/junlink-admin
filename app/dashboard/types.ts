@@ -75,6 +75,7 @@ export interface OverallCashFlow {
 
 export interface FinancialMetrics {
   gross_sales: number
+  net_sales: number
   net_profit: number
   transaction_count: number
   average_order_value: number

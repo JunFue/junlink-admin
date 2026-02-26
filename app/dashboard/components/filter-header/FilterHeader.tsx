@@ -49,11 +49,17 @@ export function FilterHeader() {
     ...(stores?.map((s: any) => ({ id: s.store_id, name: s.store_name })) || []),
   ]
 
+  // Avoid T00:00:00Z timezone shifts by parsing YYYY-MM-DD manually
+  const parseSafe = (s: string) => {
+    const [y, m, d] = s.split('-').map(Number)
+    return new Date(y, m - 1, d)
+  }
+
   const branchLabel =
     allBranches.find((b) => b.id === selectedBranch)?.name ?? 'All Stores'
 
-  const fromDate = new Date(dateRange.from)
-  const toDate = new Date(dateRange.to)
+  const fromDate = parseSafe(dateRange.from)
+  const toDate = parseSafe(dateRange.to)
 
   return (
     <div className="sticky top-0 z-30 -mx-6 -mt-4 sm:-mt-6 mb-2 bg-background/80 backdrop-blur-lg border-b border-border px-6 py-3 sm:py-4 w-[calc(100%+3rem)]">
@@ -195,10 +201,10 @@ export function FilterHeader() {
                           value={format(fromDate, 'yyyy-MM-dd')}
                           onChange={(e) => {
                             if (e.target.value) {
-                              const d = new Date(e.target.value)
+                              const d = parseSafe(e.target.value)
                               setCustomRange({
-                                from: startOfDay(d),
-                                to: endOfDay(d),
+                                from: d,
+                                to: d,
                               }, 'single')
                             }
                           }}
@@ -217,7 +223,7 @@ export function FilterHeader() {
                           value={format(fromDate, 'yyyy-MM-dd')}
                           onChange={(e) => {
                             if (e.target.value) {
-                              const d = new Date(e.target.value)
+                              const d = parseSafe(e.target.value)
                               setCustomRange({
                                 from: d,
                                 to: toDate,
@@ -236,7 +242,7 @@ export function FilterHeader() {
                           value={format(toDate, 'yyyy-MM-dd')}
                           onChange={(e) => {
                             if (e.target.value) {
-                              const d = new Date(e.target.value)
+                              const d = parseSafe(e.target.value)
                               setCustomRange({
                                 from: fromDate,
                                 to: d,

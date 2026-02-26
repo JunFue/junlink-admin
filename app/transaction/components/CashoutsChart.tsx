@@ -131,7 +131,13 @@ export default function CashoutsChart({ cashouts, breakdown }: CashoutsChartProp
                 ))}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
-              <Legend verticalAlign="bottom" height={36} />
+              <Legend 
+                verticalAlign="bottom" 
+                height={36} 
+                formatter={(value: string) => (
+                  <span className="text-xs font-medium text-foreground">{value}</span>
+                )}
+              />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -150,14 +156,14 @@ export default function CashoutsChart({ cashouts, breakdown }: CashoutsChartProp
                 layout="vertical"
                 margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
               >
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" opacity={0.2} />
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" opacity={0.5} />
                 <XAxis type="number" hide />
                 <YAxis
                   dataKey="name"
                   type="category"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
                   width={100}
                 />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: "transparent" }} />
@@ -185,14 +191,14 @@ export default function CashoutsChart({ cashouts, breakdown }: CashoutsChartProp
                 layout="vertical"
                 margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
               >
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" opacity={0.2} />
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" opacity={0.5} />
                 <XAxis type="number" hide />
                 <YAxis
                   dataKey="name"
                   type="category"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
                   width={100}
                 />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: "transparent" }} />
