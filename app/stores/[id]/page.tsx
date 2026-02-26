@@ -164,7 +164,7 @@ export default function StoreDashboardPage() {
         {activeTab === "overview" && <StoreOverview stats={stats} />}
         {activeTab === "inventory" && <InventoryMonitor storeId={storeId} />}
         {activeTab === "transactions" && <StoreTransactions storeId={storeId} />}
-        {activeTab === "expenses" && <StoreExpenses />}
+        {activeTab === "expenses" && <StoreExpenses storeId={storeId} />}
         {activeTab === "settings" && (
           <div className="space-y-6">
             <div className="items-start gap-6 grid lg:grid-cols-2">

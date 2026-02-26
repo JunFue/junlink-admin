@@ -3,6 +3,7 @@
 import { FilterHeader } from './components/filter-header/FilterHeader'
 import { StatsGrid } from './components/stats-grid/StatsGrid'
 import { LiquiditySection } from './components/liquidity-section/LiquiditySection'
+import { DashboardCashoutsSection } from './components/liquidity-section/DashboardCashoutsSection'
 import { ActionableGrid } from './components/actionable-grid/ActionableGrid'
 import { OperationsSection } from './components/operations-section/OperationsSection'
 
@@ -18,6 +19,9 @@ export default function DashboardPage() {
 
         {/* Section 2: Liquidity & Reconciliation */}
         <LiquiditySection />
+
+        {/* Section 2.5: Cashouts Breakdown */}
+        <DashboardCashoutsSection />
 
         {/* Section 3: Actionable Data Grid */}
         <ActionableGrid />

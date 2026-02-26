@@ -30,7 +30,6 @@ export interface PaymentMethodSlice {
   name: string
   value: number
   color: string
-  // Recharts needs index signature
   [key: string]: string | number
 }
 
@@ -81,6 +80,7 @@ export interface FinancialMetrics {
   average_order_value: number
   available_cash: number
   total_expenses: number
+  total_remittance: number
   period_cash_flow: number
   debug_start: string
   debug_end: string

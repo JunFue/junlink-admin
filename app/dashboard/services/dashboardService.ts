@@ -1,6 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
-import type { FinancialMetrics, OverallCashFlow } from '../types'
-
+import type { FinancialMetrics } from '../types'
 
 interface DashboardMetricsRow {
   gross_sales: number;
@@ -9,6 +8,7 @@ interface DashboardMetricsRow {
   average_order_value: number;
   available_cash: number;
   total_expenses: number;
+  total_remittance: number;
 }
 
 export async function getFinancialMetrics(
@@ -51,7 +51,8 @@ export async function getFinancialMetrics(
     average_order_value: Number(metrics.average_order_value || 0),
     available_cash: Number(metrics.available_cash || 0),
     total_expenses: Number(metrics.total_expenses || 0),
-    period_cash_flow: 0, // Calculated if needed, or omit
+    total_remittance: Number(metrics.total_remittance || 0),
+    period_cash_flow: 0, 
     debug_start: startDate,
     debug_end: endDate,
   };

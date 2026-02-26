@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useInView } from "react-intersection-observer";
-import { Search, Wallet, Plus, ArrowUpDown, Trash2 } from "lucide-react";
+import { Wallet, ArrowUpDown, Trash2 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils/formatters";
 import {
   useReactTable,
@@ -16,22 +16,27 @@ import {
 
 import { useCashouts, useDeleteCashout } from "@/app/transaction/hooks/useCashouts";
 import type { CashoutWithDetails } from "@/app/transaction/services/cashoutsService";
-import CashoutModal from "./CashoutModal";
-import CashoutsChart from "@/app/transaction/components/CashoutsChart";
+import CashoutsChart from "./CashoutsChart";
 
 const columnHelper = createColumnHelper<CashoutWithDetails>();
 
-interface StoreExpensesProps {
-  storeId: string;
+interface CashoutsViewProps {
+  searchQuery: string;
+  selectedStore: string;
+  dateRange: string;
+  subcategoryFilter: string;
 }
 
-export default function StoreExpenses({ storeId }: StoreExpensesProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [dateRange, setDateRange] = useState<string>("all");
+export default function CashoutsView({
+  searchQuery,
+  selectedStore,
+  dateRange,
+  subcategoryFilter,
+}: CashoutsViewProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useCashouts(dateRange, storeId);
+  // The hook internal handles the subcategory logic locally if provided
+  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useCashouts(dateRange, selectedStore, subcategoryFilter);
   const deleteCashoutMutation = useDeleteCashout();
   const { ref, inView } = useInView();
 
@@ -65,6 +70,15 @@ export default function StoreExpenses({ storeId }: StoreExpensesProps) {
         cell: (info) => (
           <span className="text-sm text-foreground font-medium">
             {formatDate(info.getValue())}
+          </span>
+        ),
+      }),
+      columnHelper.accessor("stores", {
+        id: "store_name",
+        header: "Store",
+        cell: (info) => (
+           <span className="text-sm text-muted-foreground whitespace-nowrap">
+            {info.getValue()?.store_name || "Unknown Store"}
           </span>
         ),
       }),
@@ -162,7 +176,6 @@ export default function StoreExpenses({ storeId }: StoreExpensesProps) {
       globalFilter: searchQuery,
     },
     onSortingChange: setSorting,
-    onGlobalFilterChange: setSearchQuery,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -177,140 +190,98 @@ export default function StoreExpenses({ storeId }: StoreExpensesProps) {
         tx.receipt_no?.toLowerCase().includes(search) ||
         tx.notes?.toLowerCase().includes(search) ||
         subCat.toLowerCase().includes(search) ||
-        user.toLowerCase().includes(search)
+        user.toLowerCase().includes(search) ||
+        tx.stores?.store_name?.toLowerCase().includes(search)
       );
     },
   });
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Header & Actions */}
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto flex-1">
-          <div className="relative flex-1 sm:max-w-xs">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search cashouts..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-input bg-background py-2 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <select
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value)}
-            className="rounded-lg border border-input bg-background px-4 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring w-full sm:w-auto"
-          >
-            <option value="all">All Time</option>
-            <option value="today">Today</option>
-            <option value="week">Last 7 Days</option>
-            <option value="month">Last 30 Days</option>
-          </select>
-        </div>
-        
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg font-medium text-sm transition-colors w-full sm:w-auto whitespace-nowrap shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Record Cashout
-        </button>
-      </div>
-
-      {/* Chart Overview */}
       <CashoutsChart cashouts={cashouts} />
 
-      {/* Cashouts Table */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr
-                  key={headerGroup.id}
-                  className="border-b border-border bg-muted/50"
+        <table className="w-full">
+          <thead>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr
+                key={headerGroup.id}
+                className="border-b border-border bg-muted/50"
+              >
+                {headerGroup.headers.map((header) => (
+                  <th
+                    key={header.id}
+                    className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                  >
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </th>
+                ))}
+              </tr>
+            ))}
+          </thead>
+          <tbody className="divide-y divide-border">
+            {isLoading ? (
+              [...Array(5)].map((_, i) => (
+                <tr key={i}>
+                   {columns.map((_, colIdx) => (
+                      <td key={colIdx} className="px-6 py-4">
+                         <div className={`h-4 rounded animate-shimmer ${colIdx === 5 ? 'w-16 ml-auto' : 'w-24'}`} />
+                      </td>
+                   ))}
+                </tr>
+              ))
+            ) : table.getRowModel().rows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={columns.length}
+                  className="px-6 py-12 text-center"
                 >
-                  {headerGroup.headers.map((header) => (
-                    <th
-                      key={header.id}
-                      className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </th>
+                  <Wallet className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                  <p className="text-lg font-medium text-foreground">
+                    No cashouts found
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Try adjusting your filters to see more results.
+                  </p>
+                </td>
+              </tr>
+            ) : (
+              table.getRowModel().rows.map((row) => (
+                <tr
+                  key={row.id}
+                  className="hover:bg-muted/50 transition-colors"
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <td key={cell.id} className="px-6 py-4">
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
+                    </td>
                   ))}
                 </tr>
-              ))}
-            </thead>
-            <tbody className="divide-y divide-border">
-              {isLoading ? (
-                [...Array(5)].map((_, i) => (
-                  <tr key={i}>
-                     {columns.map((_, colIdx) => (
-                        <td key={colIdx} className="px-6 py-4">
-                          <div className={`h-4 rounded animate-shimmer ${colIdx === 4 ? 'w-16 ml-auto' : 'w-24'}`} />
-                        </td>
-                     ))}
-                  </tr>
-                ))
-              ) : table.getRowModel().rows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={columns.length}
-                    className="px-6 py-12 text-center"
-                  >
-                    <Wallet className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                    <p className="text-lg font-medium text-foreground">
-                      No cashouts recorded
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Click &quot;Record Cashout&quot; to add a new entry.
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                table.getRowModel().rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="hover:bg-muted/50 transition-colors"
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-6 py-4">
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        
-        {/* Infinite Scroll Trigger */}
-        <div ref={ref} className="h-4 flex items-center justify-center py-6">
-          {isFetchingNextPage && (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              Loading more...
-            </div>
-          )}
-        </div>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
-      {/* Modal */}
-      <CashoutModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        storeId={storeId} 
-      />
+      {/* Infinite Scroll Trigger */}
+      <div ref={ref} className="h-4 flex items-center justify-center py-6">
+        {isFetchingNextPage && (
+          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            Loading more...
+          </div>
+        )}
+      </div>
     </div>
+  </div>
   );
 }

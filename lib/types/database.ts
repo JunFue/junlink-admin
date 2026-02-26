@@ -155,6 +155,14 @@ export interface Expense {
   source: string | null;
   category_id: string | null;
   classification_id: string | null;
+  cashout_type: 'COGS' | 'OPEX' | 'REMITTANCE' | null;
+  remittance_category_id: string | null;
+}
+
+export interface RemittanceCategory {
+  id: string;
+  name: string;
+  created_at: string | null;
 }
 
 export interface StockFlow {

@@ -28,7 +28,7 @@ export function CashPositionCard() {
     availableCash: realData?.available_cash ?? 0,
     netProfit: realData?.net_profit ?? 0,
     totalExpenses: realData?.total_expenses ?? 0,
-    ownerDrawings: 0, 
+    totalRemittance: realData?.total_remittance ?? 0,
   }
 
   const hasRealData = !!realData
@@ -46,6 +46,13 @@ export function CashPositionCard() {
       value: data.totalExpenses,
       type: 'negative',
       icon: <Package className="h-4 w-4" />,
+      isRealtime: hasRealData,
+    },
+    {
+      label: 'Remittances',
+      value: data.totalRemittance,
+      type: 'negative',
+      icon: <Wallet className="h-4 w-4" />,
       isRealtime: hasRealData,
     },
   ]

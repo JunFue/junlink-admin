@@ -61,6 +61,8 @@ CREATE TABLE public.daily_store_stats (
   total_opex numeric DEFAULT 0,
   total_remittance numeric DEFAULT 0,
   cash_remaining numeric DEFAULT 0,
+  forwarded_balance numeric DEFAULT 0,
+  running_balance numeric DEFAULT 0,
   CONSTRAINT daily_store_stats_pkey PRIMARY KEY (id),
   CONSTRAINT daily_store_stats_store_id_fkey FOREIGN KEY (store_id) REFERENCES public.stores(store_id)
 );
@@ -99,12 +101,14 @@ CREATE TABLE public.items (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   item_name text NOT NULL,
   sku text NOT NULL,
-  cost_price numeric,
+  sales_price numeric,
   description text,
   store_id uuid,
   user_id uuid,
   low_stock_threshold integer,
   category_id uuid,
+  unit_cost numeric,
+  image_url text,
   CONSTRAINT items_pkey PRIMARY KEY (id),
   CONSTRAINT items_stores_id_fkey FOREIGN KEY (store_id) REFERENCES public.stores(store_id),
   CONSTRAINT items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.product_category(id),
@@ -218,6 +222,7 @@ CREATE TABLE public.stores (
   enrollment_id text NOT NULL DEFAULT "substring"(md5((random())::text), 1, 8) UNIQUE,
   deleted_at timestamp with time zone,
   co_admins ARRAY DEFAULT '{}'::uuid[],
+  enrollment_code_expires_at timestamp with time zone,
   CONSTRAINT stores_pkey PRIMARY KEY (store_id),
   CONSTRAINT store_owner_auth_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
@@ -225,7 +230,7 @@ CREATE TABLE public.transactions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   sku text,
   item_name text,
-  cost_price numeric NOT NULL DEFAULT 0.00,
+  sales_price numeric NOT NULL DEFAULT 0.00,
   total_price numeric NOT NULL,
   discount numeric DEFAULT 0.00,
   cashier uuid,
