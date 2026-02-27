@@ -2,22 +2,21 @@
 
 import {
   LOW_STOCK_ITEMS,
-  BEST_SELLERS,
   MOST_STOCKED_ITEMS,
 } from '../../data'
 import { formatCurrency, formatNumber } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
 import {
   AlertTriangle,
-  Trophy,
   Package,
 } from 'lucide-react'
+import { BestSellersCard } from './BestSellersCard'
 
 export function ActionableGrid() {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       {/* Low Stock Alerts */}
-      <div className="rounded-xl border border-border bg-card p-6">
+      <div className="rounded-xl border border-border bg-card p-6 flex flex-col h-[500px] overflow-hidden">
         <div className="flex items-center gap-3 mb-5">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/10">
             <AlertTriangle className="h-4.5 w-4.5 text-destructive" />
@@ -30,9 +29,9 @@ export function ActionableGrid() {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="flex-1 overflow-y-auto pr-1">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="sticky top-0 bg-card z-10">
               <tr className="border-b border-border/50">
                 <th className="pb-2 text-left text-xs font-medium text-muted-foreground">
                   Item
@@ -92,53 +91,11 @@ export function ActionableGrid() {
       </div>
 
       {/* Top 5 Best Sellers */}
-      <div className="rounded-xl border border-border bg-card p-6">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-warning/10">
-            <Trophy className="h-4.5 w-4.5 text-warning" />
-          </div>
-          <h3 className="text-sm font-semibold text-foreground">
-            Top 5 Best Sellers
-          </h3>
-        </div>
-
-        <div className="space-y-3">
-          {BEST_SELLERS.map((item, index) => (
-            <div
-              key={item.id}
-              className="flex items-center gap-3 py-2 border-b border-border/30 last:border-0"
-            >
-              <span
-                className={cn(
-                  'flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold shrink-0',
-                  index === 0
-                    ? 'bg-warning/20 text-warning'
-                    : index === 1
-                    ? 'bg-muted text-muted-foreground'
-                    : 'bg-muted/50 text-muted-foreground'
-                )}
-              >
-                {index + 1}
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">
-                  {item.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {formatNumber(item.unitsSold)} sold
-                </p>
-              </div>
-              <span className="text-sm font-semibold text-success shrink-0">
-                {formatCurrency(item.grossProfit)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <BestSellersCard />
 
       {/* Most Stocked Items */}
-      <div className="rounded-xl border border-border bg-card p-6">
-        <div className="flex items-center gap-3 mb-5">
+      <div className="rounded-xl border border-border bg-card p-6 flex flex-col h-[500px] overflow-hidden">
+        <div className="flex items-center gap-3 mb-5 shrink-0">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
             <Package className="h-4.5 w-4.5 text-primary" />
           </div>
@@ -147,12 +104,13 @@ export function ActionableGrid() {
           </h3>
         </div>
 
-        <div className="space-y-3">
+        <div className="flex-1 overflow-y-auto pr-1 space-y-3">
           {MOST_STOCKED_ITEMS.map((item) => (
             <div
               key={item.id}
               className="flex items-center justify-between py-2 border-b border-border/30 last:border-0"
             >
+
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-foreground truncate">
                   {item.name}

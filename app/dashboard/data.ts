@@ -4,7 +4,6 @@ import type {
   LiquidityData,
   PaymentMethodSlice,
   LowStockItem,
-  BestSeller,
   MostStockedItem,
   ActivityEvent,
 } from './types'
@@ -224,14 +223,7 @@ export const LOW_STOCK_ITEMS: LowStockItem[] = [
   { id: '5', name: 'Brown Sugar', currentStock: 5, reorderPoint: 25 },
 ]
 
-// ── Top 5 Best Sellers ────────────────────────────
-export const BEST_SELLERS: BestSeller[] = [
-  { id: '1', name: 'Iced Spanish Latte', unitsSold: 312, grossProfit: 18_720 },
-  { id: '2', name: 'Classic Milk Tea', unitsSold: 287, grossProfit: 14_350 },
-  { id: '3', name: 'Matcha Latte', unitsSold: 198, grossProfit: 13_860 },
-  { id: '4', name: 'Caramel Macchiato', unitsSold: 176, grossProfit: 12_320 },
-  { id: '5', name: 'Brown Sugar Boba', unitsSold: 164, grossProfit: 9_840 },
-]
+
 
 // ── Most Stocked Items ────────────────────────────
 export const MOST_STOCKED_ITEMS: MostStockedItem[] = [

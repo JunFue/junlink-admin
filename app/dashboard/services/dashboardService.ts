@@ -20,9 +20,6 @@ export async function getFinancialMetrics(
 ): Promise<FinancialMetrics | null> {
   const normalizedStoreId = (!storeId || storeId === '' || storeId === 'null') ? null : storeId;
 
-  console.log('[dashboardService] Fetching metrics from RPC:', { normalizedStoreId, startDate, endDate, datePreset });
-
-  // Fetch everything from the updated RPC
   const { data: metrics, error: metricsError } = await supabase
     .rpc('get_dashboard_metrics', { 
       p_store_id: normalizedStoreId, 
@@ -38,11 +35,8 @@ export async function getFinancialMetrics(
   }
 
   if (!metrics) {
-    console.log('[dashboardService] No metrics returned for:', { normalizedStoreId, startDate, endDate });
     return null;
   }
-
-  console.log('[dashboardService] RPC Success:', metrics);
 
   return {
     gross_sales: Number(metrics.gross_sales || 0),

@@ -41,11 +41,22 @@ export interface LowStockItem {
 }
 
 export interface BestSeller {
-  id: string
-  name: string
-  unitsSold: number
-  grossProfit: number
+  item_name: string
+  total_sold: number
+  revenue: number
 }
+
+export interface DeadStockItem {
+  item_id: string
+  item_name: string
+  sku: string
+  sales_price: number
+  unit_cost: number
+  image_url: string
+  category_id: string
+  store_name: string
+}
+
 
 export interface MostStockedItem {
   id: string

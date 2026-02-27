@@ -47,6 +47,20 @@ CREATE TABLE public.customers (
   CONSTRAINT customers_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.customer_groups(id),
   CONSTRAINT customers_owner_fkey FOREIGN KEY (admin_id) REFERENCES public.users(user_id)
 );
+CREATE TABLE public.daily_item_stats (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  store_id uuid NOT NULL,
+  item_id uuid NOT NULL,
+  item_name text,
+  date date NOT NULL DEFAULT CURRENT_DATE,
+  quantity_sold numeric DEFAULT 0,
+  total_revenue numeric DEFAULT 0,
+  category_id uuid,
+  CONSTRAINT daily_item_stats_pkey PRIMARY KEY (id),
+  CONSTRAINT daily_item_stats_category_fkey FOREIGN KEY (category_id) REFERENCES public.product_category(id),
+  CONSTRAINT daily_item_stats_store_fkey FOREIGN KEY (store_id) REFERENCES public.stores(store_id),
+  CONSTRAINT daily_item_stats_item_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+);
 CREATE TABLE public.daily_store_stats (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   store_id uuid NOT NULL,
@@ -80,9 +94,11 @@ CREATE TABLE public.expenses (
   classification_id uuid,
   cashout_type text CHECK (cashout_type = ANY (ARRAY['COGS'::text, 'OPEX'::text, 'REMITTANCE'::text])),
   metadata jsonb DEFAULT '{}'::jsonb,
+  remittance_category_id uuid,
   CONSTRAINT expenses_pkey PRIMARY KEY (id),
   CONSTRAINT expenses_classification_id_fkey FOREIGN KEY (classification_id) REFERENCES public.classification(id),
   CONSTRAINT expenses_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT expenses_remittance_category_id_fkey FOREIGN KEY (remittance_category_id) REFERENCES public.remittance_categories(id),
   CONSTRAINT expenses_store_id_fkey FOREIGN KEY (store_id) REFERENCES public.stores(store_id),
   CONSTRAINT expenses_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.product_category(id)
 );
@@ -164,6 +180,12 @@ CREATE TABLE public.quick_pick_items (
   CONSTRAINT quick_pick_items_pkey PRIMARY KEY (id),
   CONSTRAINT quick_pick_items_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id),
   CONSTRAINT quick_pick_items_store_id_fkey FOREIGN KEY (store_id) REFERENCES public.stores(store_id)
+);
+CREATE TABLE public.remittance_categories (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL UNIQUE,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT remittance_categories_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.staff_permissions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

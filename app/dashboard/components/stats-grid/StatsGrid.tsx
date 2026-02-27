@@ -33,14 +33,7 @@ export function StatsGrid() {
       </div>
     )
   }
-  // Debug log to catch any weird date shifts
-  if (realData) {
-    console.log('📊 Dashboard Data Debug:', {
-      requested: dateRange,
-      received_start: realData.debug_start,
-      received_end: realData.debug_end,
-    })
-  }
+ 
 
   const grossSales = realData?.gross_sales ?? 0
   const netSales = realData?.net_sales ?? 0
