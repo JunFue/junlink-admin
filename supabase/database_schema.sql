@@ -6,6 +6,7 @@ CREATE TABLE public.classification (
   name text NOT NULL,
   store_id uuid NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
+  icon text DEFAULT 'Store'::text,
   CONSTRAINT classification_pkey PRIMARY KEY (id),
   CONSTRAINT classification_store_id_fkey FOREIGN KEY (store_id) REFERENCES public.stores(store_id)
 );
@@ -199,6 +200,7 @@ CREATE TABLE public.staff_permissions (
   can_manage_categories boolean DEFAULT false,
   can_manage_customers boolean DEFAULT false,
   can_manage_expenses boolean DEFAULT false,
+  can_manage_store boolean NOT NULL DEFAULT false,
   CONSTRAINT staff_permissions_pkey PRIMARY KEY (id),
   CONSTRAINT staff_permissions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
 );
@@ -214,6 +216,8 @@ CREATE TABLE public.stock_flow (
   store_id uuid,
   item_id uuid NOT NULL,
   category_id uuid,
+  expiry_date date,
+  batch_remaining numeric DEFAULT 0,
   CONSTRAINT stock_flow_pkey PRIMARY KEY (id),
   CONSTRAINT stock_flow_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT stock_flow_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.product_category(id),
@@ -245,6 +249,7 @@ CREATE TABLE public.stores (
   deleted_at timestamp with time zone,
   co_admins ARRAY DEFAULT '{}'::uuid[],
   enrollment_code_expires_at timestamp with time zone,
+  drawer_mode text NOT NULL DEFAULT 'unified'::text CHECK (drawer_mode = ANY (ARRAY['unified'::text, 'multiple'::text])),
   CONSTRAINT stores_pkey PRIMARY KEY (store_id),
   CONSTRAINT store_owner_auth_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );

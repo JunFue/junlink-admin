@@ -1,30 +1,28 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { ArrowLeft, LayoutDashboard, Package, Receipt, History } from "lucide-react";
+import { ArrowLeft, Package, Receipt } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { cn } from "@/lib/utils/cn";
-import InventoryMonitor from "../components/inventory/InventoryMonitor";
-import StoreOverview from "../components/StoreOverview";
-import StoreExpenses from "../components/StoreExpenses";
-import StoreTransactions from "../components/StoreTransactions";
+import { Settings, ClipboardList, DollarSign, History, LayoutDashboard, Trash2, RotateCcw } from "lucide-react";
+import StoreDashboardSection from "./components/dashboard/StoreDashboardSection";
+import SalesHistorySection from "./components/sales-history/SalesHistorySection";
+import CashoutRecordsSection from "./components/cashout-records/CashoutRecordsSection";
+import { useStore } from "../hooks/useStore";
+import { useStoreStats } from "../hooks/useStoreStats";
 import { archiveStore, restoreStore } from "../services/storeService";
 import { createClient } from "@/lib/supabase/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Settings, Trash2, RotateCcw, AlertTriangle } from "lucide-react";
-
-import { useStore } from "../hooks/useStore";
-import { useStoreStats } from "../hooks/useStoreStats";
 import ManageAdmins from "../components/ManageAdmins";
 import OwnershipTransfer from "../components/OwnershipTransfer";
 
-type Tab = "overview" | "inventory" | "expenses" | "transactions" | "settings";
+type Tab = "dashboard" | "sales-history" | "cashout-records" | "audit-logs" | "settings";
 
 export default function StoreDashboardPage() {
   const params = useParams();
   const storeId = params.id as string;
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [activeTab, setActiveTab] = useState<Tab>("dashboard");
 
   const { data: store, isLoading: storeLoading } = useStore(storeId);
   const { data: stats, isLoading: statsLoading } = useStoreStats(storeId);
@@ -64,24 +62,24 @@ export default function StoreDashboardPage() {
 
   const tabs = [
     {
-      id: "overview",
-      label: "Overview",
+      id: "dashboard",
+      label: "Stores Dashboard",
       icon: LayoutDashboard,
     },
     {
-      id: "inventory",
-      label: "Inventory",
-      icon: Package,
-    },
-    {
-      id: "transactions",
-      label: "Transactions",
+      id: "sales-history",
+      label: "Sales History",
       icon: History,
     },
     {
-      id: "expenses",
-      label: "Expenses",
-      icon: Receipt,
+      id: "cashout-records",
+      label: "Cashout Records",
+      icon: DollarSign,
+    },
+    {
+      id: "audit-logs",
+      label: "Audit Logs",
+      icon: ClipboardList,
     },
     {
       id: "settings",
@@ -161,86 +159,19 @@ export default function StoreDashboardPage() {
 
       {/* Tab Content */}
       <div className="mt-6">
-        {activeTab === "overview" && <StoreOverview stats={stats} />}
-        {activeTab === "inventory" && <InventoryMonitor storeId={storeId} />}
-        {activeTab === "transactions" && <StoreTransactions storeId={storeId} />}
-        {activeTab === "expenses" && <StoreExpenses storeId={storeId} />}
+        {activeTab === "dashboard" && <StoreDashboardSection storeId={storeId} />}
+        {activeTab === "sales-history" && <SalesHistorySection storeId={storeId} />}
+        {activeTab === "cashout-records" && <CashoutRecordsSection storeId={storeId} />}
+        {activeTab === "audit-logs" && (
+          <div className="p-8 text-center text-muted-foreground border rounded-lg bg-card">
+            <h3 className="font-medium text-lg text-foreground mb-2">Audit Logs</h3>
+            <p>End of day reports will be shown here.</p>
+          </div>
+        )}
         {activeTab === "settings" && (
-          <div className="space-y-6">
-            <div className="items-start gap-6 grid lg:grid-cols-2">
-               {/* Left Column: Admin Management */}
-               <div className="space-y-6">
-                  {/* Co-Admins Management */}
-                  <ManageAdmins 
-                    storeId={storeId} 
-                    currentCoAdmins={store.co_admins || []} 
-                    ownerId={store.user_id} 
-                  />
-                  
-                  {/* Ownership Transfer */}
-                   <OwnershipTransfer currentCoAdmins={store.co_admins || []} />
-               </div>
-
-               {/* Right Column: Danger Zone */}
-               <div className="border-border bg-card p-6 border rounded-xl h-fit">
-                <h2 className="mb-4 font-semibold text-lg">Danger Zone</h2>
-                <p className="mb-6 text-muted-foreground text-sm">
-                  Actions here can affect store accessibility. Please proceed with caution.
-                </p>
-
-                {!isArchived ? (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center p-4 border border-destructive/20 rounded-lg bg-destructive/5">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2 font-medium text-destructive">
-                          <Trash2 className="w-4 h-4" />
-                          Archive Store
-                        </div>
-                        <p className="text-muted-foreground text-xs">
-                          This will soft-delete the store. Members will no longer be able to access the POS terminal.
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          if (confirm("Are you sure you want to archive this store?")) {
-                            archiveMutation.mutate(storeId);
-                          }
-                        }}
-                        disabled={archiveMutation.isPending}
-                        className="bg-destructive hover:bg-destructive/90 disabled:opacity-50 px-4 py-2 rounded-lg text-destructive-foreground text-sm font-medium transition-colors"
-                      >
-                        {archiveMutation.isPending ? "Archiving..." : "Archive Store"}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center p-4 border border-primary/20 rounded-lg bg-primary/5">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2 font-medium text-primary">
-                          <RotateCcw className="w-4 h-4" />
-                          Restore Store
-                        </div>
-                        <p className="text-muted-foreground text-xs">
-                          This will restore the store and allow members to access the POS terminal again.
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          if (confirm("Are you sure you want to restore this store?")) {
-                            restoreMutation.mutate(storeId);
-                          }
-                        }}
-                        disabled={restoreMutation.isPending}
-                        className="bg-primary hover:bg-primary/90 disabled:opacity-50 px-4 py-2 rounded-lg text-primary-foreground text-sm font-medium transition-colors"
-                      >
-                        {restoreMutation.isPending ? "Restoring..." : "Restore Store"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="p-8 text-center text-muted-foreground border rounded-lg bg-card">
+            <h3 className="font-medium text-lg text-foreground mb-2">Settings</h3>
+            <p>Settings contents have been temporarily removed.</p>
           </div>
         )}
       </div>
