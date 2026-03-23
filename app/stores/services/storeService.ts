@@ -49,7 +49,7 @@ export async function getStoresWithStaffCount(supabase: SupabaseClient): Promise
   const { data: storesData, error } = await supabase
     .from('stores')
     .select('*')
-    .is('deleted_at', null)
+    .order('deleted_at', { ascending: true, nullsFirst: true })
     .order('store_name', { ascending: true })
 
   if (error) {
@@ -101,25 +101,25 @@ export async function createStore(
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) throw new Error('Not authenticated')
 
-  // 2. Authorization Check
-  // Ensures the user exists in the 'admin' table before allowing creation.
-  const { data: adminData, error: adminError } = await supabase
-    .from('admin')
-    .select('user_id')
-    .eq('user_id', user.id)
-    .single()
+  // Authorization is handled by the middleware (check_admin_access RPC)
 
-  if (adminError || !adminData) {
-    throw new Error('Unauthorized: You do not have permission to create a store.')
+  // 2. Prepare Insert Payload
+  // Auto-generate enrollment code if not provided
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  let enrollmentId = storeData.enrollment_id || ''
+  if (!enrollmentId) {
+    for (let i = 0; i < 8; i++) {
+      enrollmentId += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
   }
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
 
-  // 3. Prepare Insert Payload
-  // Explicitly map fields and handle optional undefined values by converting to null
   const insertPayload = {
     store_name: storeData.store_name,
     store_address: storeData.address,
-    user_id: user.id, // Use the authenticated user's ID directly
-    enrollment_id: storeData.enrollment_id || null,
+    user_id: user.id,
+    enrollment_id: enrollmentId,
+    enrollment_code_expires_at: expiresAt,
     store_img: storeData.store_img || null
   }
 
@@ -135,18 +135,8 @@ export async function createStore(
     throw error
   }
 
-  // 5. Update creator's store_id and role
-  const { error: userError } = await supabase
-    .from('users')
-    .update({
-      store_id: data.store_id,
-      role: 'owner'
-    })
-    .eq('user_id', user.id)
-
-  if (userError) {
-    console.error('Error updating creator user record:', userError)
-  }
+  // Note: In the admin backoffice, we do NOT update the admin's own user record.
+  // The admin's role must remain 'admin' — store ownership is tracked via stores.user_id.
 
   return data as Store
 }
@@ -191,7 +181,6 @@ export async function getStoreById(supabase: SupabaseClient, storeId: string): P
     .from('stores')
     .select('*')
     .eq('store_id', storeId)
-    .is('deleted_at', null)
     .single()
 
   if (error) {

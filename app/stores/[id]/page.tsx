@@ -224,10 +224,78 @@ export default function StoreDashboardPage() {
               </div>
             </div>
 
-            {/* General Settings placeholder */}
-            <div className="p-8 text-center text-muted-foreground border rounded-lg bg-card">
-              <h3 className="font-medium text-lg text-foreground mb-2">General Settings</h3>
-              <p>Settings contents have been temporarily removed.</p>
+            {/* Archive / Restore Section */}
+            <div className={cn(
+              "p-6 border rounded-lg",
+              isArchived ? "bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-800/30" : "bg-card"
+            )}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-medium text-lg text-foreground mb-1">
+                    {isArchived ? "Restore Store" : "Archive Store"}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {isArchived
+                      ? "This store is currently archived. Staff members cannot use it. Restore it to make it active again."
+                      : "Archiving hides the store and prevents staff from using it. You can restore it anytime."}
+                  </p>
+                </div>
+                {isArchived ? (
+                  <button
+                    onClick={() => {
+                      if (confirm("Are you sure you want to restore this store?")) {
+                        restoreMutation.mutate(storeId);
+                      }
+                    }}
+                    disabled={restoreMutation.isPending}
+                    className="flex items-center gap-2 bg-success text-success-foreground px-4 py-2 rounded-md hover:bg-success/90 transition-colors disabled:opacity-50 text-sm font-medium shrink-0"
+                  >
+                    <RotateCcw className={cn("w-4 h-4", restoreMutation.isPending && "animate-spin")} />
+                    {restoreMutation.isPending ? "Restoring..." : "Restore Store"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      if (confirm("Are you sure you want to archive this store? Staff will lose access.")) {
+                        archiveMutation.mutate(storeId);
+                      }
+                    }}
+                    disabled={archiveMutation.isPending}
+                    className="flex items-center gap-2 bg-yellow-500 text-black px-4 py-2 rounded-md hover:bg-yellow-400 transition-colors disabled:opacity-50 text-sm font-medium shrink-0"
+                  >
+                    <Trash2 className={cn("w-4 h-4", archiveMutation.isPending && "animate-spin")} />
+                    {archiveMutation.isPending ? "Archiving..." : "Archive Store"}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Danger Zone */}
+            <div className="p-6 border border-destructive/30 rounded-lg bg-destructive/5">
+              <h3 className="font-medium text-lg text-destructive mb-1">Danger Zone</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Permanently deleting a store will remove all associated data including transactions, inventory, and staff records. This action <strong>cannot be undone</strong>.
+              </p>
+              <button
+                onClick={() => {
+                  const confirmation = prompt(
+                    `To permanently delete "${store.store_name}", type the store name below:`
+                  );
+                  if (confirmation === store.store_name) {
+                    archiveMutation.mutate(storeId, {
+                      onSuccess: () => {
+                        window.location.href = "/stores";
+                      },
+                    });
+                  } else if (confirmation !== null) {
+                    alert("Store name did not match. Deletion cancelled.");
+                  }
+                }}
+                className="flex items-center gap-2 bg-destructive text-destructive-foreground px-4 py-2 rounded-md hover:bg-destructive/90 transition-colors text-sm font-medium"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Store Permanently
+              </button>
             </div>
           </div>
         )}

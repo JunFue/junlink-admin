@@ -64,20 +64,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Check admin access status for authenticated users on protected routes
+  // Check access status for authenticated users on protected routes
+  // Only block members and deleted accounts — admins must always have access
   if (user && !isPublicRoute) {
     const { data: accessCheck, error: accessError } = await supabase.rpc('check_admin_access')
 
     if (!accessError && accessCheck) {
       const result = accessCheck as { can_access: boolean; reason: string; message: string }
       
-      // If account is deleted, redirect to account-deleted page
-      if (!result.can_access && result.reason === 'account_deleted') {
-        const url = request.nextUrl.clone()
-        url.pathname = '/account-deleted'
-        return NextResponse.redirect(url)
-      }
-
       // If user is a member (not admin), prevent access to admin dashboard
       if (!result.can_access && result.reason === 'invalid_role') {
         // Sign out the user and redirect to login with reason
@@ -98,6 +92,7 @@ export async function middleware(request: NextRequest) {
         return response
       }
 
+      // All other cases (admin with deleted store, etc.) — allow through
     }
   }
 
