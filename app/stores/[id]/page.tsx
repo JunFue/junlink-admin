@@ -5,12 +5,13 @@ import { ArrowLeft, Package, Receipt } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { cn } from "@/lib/utils/cn";
-import { Settings, ClipboardList, DollarSign, History, LayoutDashboard, Trash2, RotateCcw } from "lucide-react";
+import { Settings, ClipboardList, DollarSign, History, LayoutDashboard, Trash2, RotateCcw, Hash, RefreshCw } from "lucide-react";
 import StoreDashboardSection from "./components/dashboard/StoreDashboardSection";
 import SalesHistorySection from "./components/sales-history/SalesHistorySection";
 import CashoutRecordsSection from "./components/cashout-records/CashoutRecordsSection";
 import { useStore } from "../hooks/useStore";
 import { useStoreStats } from "../hooks/useStoreStats";
+import { useRegenerateCode } from "../hooks/useRegenerateCode";
 import { archiveStore, restoreStore } from "../services/storeService";
 import { createClient } from "@/lib/supabase/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -26,6 +27,15 @@ export default function StoreDashboardPage() {
 
   const { data: store, isLoading: storeLoading } = useStore(storeId);
   const { data: stats, isLoading: statsLoading } = useStoreStats(storeId);
+  const { mutate: regenerateCode, isPending: isRegenerating } = useRegenerateCode();
+
+  // Evaluate expiration
+  const hasExpiry = store ? !!store.enrollment_code_expires_at : false;
+  const isExpired = store ? (!store.enrollment_code_expires_at || new Date(store.enrollment_code_expires_at) < new Date()) : true;
+
+  const handleRegenerate = () => {
+    if (store) regenerateCode(store.store_id);
+  };
 
   const queryClient = useQueryClient();
   const supabase = createClient();
@@ -169,9 +179,56 @@ export default function StoreDashboardPage() {
           </div>
         )}
         {activeTab === "settings" && (
-          <div className="p-8 text-center text-muted-foreground border rounded-lg bg-card">
-            <h3 className="font-medium text-lg text-foreground mb-2">Settings</h3>
-            <p>Settings contents have been temporarily removed.</p>
+          <div className="space-y-6">
+            {/* Enrollment Code Section */}
+            <div className="p-6 border rounded-lg bg-card">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-medium text-lg text-foreground mb-1">Store Enrollment Code</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    This code is used by staff members to enroll in this store via the POS app.
+                  </p>
+                </div>
+                <button
+                  onClick={handleRegenerate}
+                  disabled={isRegenerating}
+                  className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 text-sm font-medium"
+                >
+                  <RefreshCw className={cn("w-4 h-4", isRegenerating && "animate-spin")} />
+                  {isRegenerating ? "Generating..." : "Regenerate Code"}
+                </button>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 mt-2">
+                <div className="flex items-center gap-2 bg-muted px-4 py-3 rounded-md border text-lg font-mono tracking-wider">
+                  <Hash className="w-5 h-5 text-muted-foreground" />
+                  {isExpired ? (
+                    <span className="text-muted-foreground">Expired</span>
+                  ) : (
+                    <span className="font-bold">{store.enrollment_id}</span>
+                  )}
+                </div>
+                <div className="flex flex-col">
+                  <span className={cn(
+                    "text-xs font-bold uppercase tracking-wider px-2 py-1 rounded-sm w-fit",
+                    isExpired ? "bg-destructive/20 text-destructive" : "bg-success/20 text-success"
+                  )}>
+                    {isExpired ? 'Expired' : 'Active'}
+                  </span>
+                  {store.enrollment_code_expires_at && !isExpired && (
+                    <span className="text-xs text-muted-foreground mt-1">
+                      Expires: {new Date(store.enrollment_code_expires_at).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* General Settings placeholder */}
+            <div className="p-8 text-center text-muted-foreground border rounded-lg bg-card">
+              <h3 className="font-medium text-lg text-foreground mb-2">General Settings</h3>
+              <p>Settings contents have been temporarily removed.</p>
+            </div>
           </div>
         )}
       </div>

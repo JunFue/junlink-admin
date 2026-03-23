@@ -1,6 +1,7 @@
 ﻿"use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 
 // --- 1. Domain Interfaces ---
@@ -48,9 +49,10 @@ export async function processTransaction(
   headerPayload: TransactionHeader,
   itemsPayload: TransactionItem[]
 ): Promise<ActionResponse<{ invoice_no: string; payment_id: string }>> {
-  const supabase = await createClient();
+  const authClient = await createClient();
+  const supabase = createAdminClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await authClient.auth.getUser();
   if (!user) return { success: false, error: "Not authenticated" };
 
   try {
@@ -112,9 +114,10 @@ export async function getTransactionHistory(
   pageSize: number = 10,
   filters: TransactionFilters = {}
 ): Promise<ActionResponse<TransactionRecord[]>> {
-  const supabase = await createClient();
+  const authClient = await createClient();
+  const supabase = createAdminClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await authClient.auth.getUser();
   if (!user) return { success: false, error: "Not authenticated" };
 
   // Calculate pagination range
@@ -189,9 +192,10 @@ export async function getPaymentHistory(
   pageSize: number,
   filters: PaymentFilters
 ): Promise<ActionResponse<PaymentRecord[]>> {
-  const supabase = await createClient();
+  const authClient = await createClient();
+  const supabase = createAdminClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await authClient.auth.getUser();
   if (!user) return { success: false, error: "Not authenticated" };
 
   const from = (page - 1) * pageSize;
@@ -236,9 +240,10 @@ export async function getPaymentHistory(
 }
 
 export async function deletePayment(id: string): Promise<ActionResponse> {
-  const supabase = await createClient();
+  const authClient = await createClient();
+  const supabase = createAdminClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await authClient.auth.getUser();
   if (!user) return { success: false, error: "Not authenticated" };
 
   try {
@@ -304,9 +309,10 @@ export interface DetailedInvoice {
 export async function getInvoiceDetails(
   invoiceNo: string
 ): Promise<ActionResponse<DetailedInvoice>> {
-  const supabase = await createClient();
+  const authClient = await createClient();
+  const supabase = createAdminClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await authClient.auth.getUser();
   if (!user) return { success: false, error: "Not authenticated" };
 
   try {

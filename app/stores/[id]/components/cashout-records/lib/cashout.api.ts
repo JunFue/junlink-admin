@@ -1,8 +1,13 @@
 ﻿"use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-const getSupabase = async () => {
+const getSupabase = () => {
+  return createAdminClient();
+};
+
+const getAuthClient = async () => {
   return await createClient();
 };
 
@@ -132,8 +137,9 @@ export interface CashoutPermissions {
 
 // 0. Fetch User Permissions
 export const fetchUserPermissions = async (): Promise<CashoutPermissions> => {
-  const supabase = await getSupabase();
-  const { data: { user } } = await supabase.auth.getUser();
+  const authClient = await getAuthClient();
+  const supabase = getSupabase();
+  const { data: { user } } = await authClient.auth.getUser();
   if (!user) return { can_manage_expenses: false };
 
   const { data, error } = await supabase
@@ -387,10 +393,11 @@ export const fetchExpensesSummary = async (
 
 // 3. Create Expense (RPC)
 export const createExpense = async (input: CashoutInput) => {
-  const supabase = await getSupabase();
+  const authClient = await getAuthClient();
+  const supabase = getSupabase();
   
   // 1. Get current user
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await authClient.auth.getUser();
   if (!user) {
     throw new Error("Not authenticated");
   }

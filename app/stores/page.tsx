@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { StoreCard } from './components/StoreCard'
 import { CreateStoreCard } from './components/CreateStoreCard'
 import { Store, Search } from 'lucide-react'
-import type { StoreWithStaffCount } from '@/lib/types/database'
+
 
 import { useStores } from './hooks/useStores'
 
@@ -17,8 +17,7 @@ export default function StoresPage() {
   }
 
   const filteredStores = stores.filter((store) =>
-    store.store_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    store.enrollment_id?.toLowerCase().includes(searchQuery.toLowerCase())
+    store.store_name?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   return (

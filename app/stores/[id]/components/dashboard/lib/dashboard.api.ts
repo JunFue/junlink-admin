@@ -1,11 +1,11 @@
 ﻿"use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import dayjs from "dayjs";
 import { CashFlowEntry, FinancialReportItem } from "./types";
 
 const getSupabase = async () => {
-  return await createClient();
+  return createAdminClient();
 };
 
 

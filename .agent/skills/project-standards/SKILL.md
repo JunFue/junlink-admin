@@ -377,6 +377,25 @@ The `middleware.ts` handles multiple guard layers in this order:
 
 ---
 
+## PWA & Service Worker
+
+### Manual Build Architecture
+Due to Webpack worker serialization issues in Next.js 15/16, the Service Worker is built manually using `esbuild` to ensure build stability and Vercel compatibility.
+
+- **Source**: `app/sw.ts`
+- **Output**: `public/sw.js`
+- **Build Script**: `node scripts/build-sw.js` (triggered by `npm run build:sw` or `postbuild`)
+- **Registration**: Client-side via `components/reusables/SWRegistration.tsx` in `layout.tsx`.
+
+### Offline Page Maintenance
+The Service Worker uses a `manualPrecache` array for critical HTML routes to ensure they are available for offline cold-starts immediately after installation.
+
+- **Rule**: If you add a new major page that **must** work offline from a cold start, you **MUST** add it to the `manualPrecache` array in `app/sw.ts`.
+- **Audit Periodically**: Review the `manualPrecache` list whenever the sitemap or critical user journeys change.
+- **Verification**: Run `npm run build` and verify `public/sw.js` exists and contains the new entries.
+
+---
+
 ## Provider Hierarchy (Root Layout)
 
 ```
