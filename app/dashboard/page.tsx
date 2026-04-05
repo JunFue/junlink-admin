@@ -2,6 +2,7 @@
 
 import { FilterHeader } from './components/filter-header/FilterHeader'
 import { StatsGrid } from './components/stats-grid/StatsGrid'
+import { MonthlyGrossTrend } from './components/monthly-trend/MonthlyGrossTrend'
 import { LiquiditySection } from './components/liquidity-section/LiquiditySection'
 import { DashboardCashoutsSection } from './components/liquidity-section/DashboardCashoutsSection'
 import { ActionableGrid } from './components/actionable-grid/ActionableGrid'
@@ -16,6 +17,9 @@ export default function DashboardPage() {
       <div className="space-y-6 mt-6">
         {/* Section 1: Top Pulse Row — 4 Stats */}
         <StatsGrid />
+
+        {/* Section 1.5: Monthly Gross Trend */}
+        <MonthlyGrossTrend />
 
         {/* Section 2: Liquidity & Reconciliation */}
         <LiquiditySection />
