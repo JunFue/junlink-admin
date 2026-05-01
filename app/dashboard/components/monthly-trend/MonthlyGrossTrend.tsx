@@ -1,28 +1,55 @@
 'use client'
 
-import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  LineChart, Line, BarChart, Bar, ComposedChart,
+  XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
-import { TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react'
-import { useGrossTrendData, type RawDailyStat } from '../../hooks/useGrossTrendData'
+import {
+  Calendar, ArrowUpRight, ArrowDownRight, Minus,
+  BarChart3, TrendingUp, Circle, ChevronLeft, ChevronRight,
+} from 'lucide-react'
+import {
+  useGrossTrendData,
+  useMultiStoreGrossTrendData,
+  useHourlyGrossTrendData,
+  useMultiStoreHourlyGrossTrendData,
+  type RawDailyStat,
+  type RawDailyStoreStat,
+  type RawHourlyStat,
+  type RawHourlyStoreStat,
+} from '../../hooks/useGrossTrendData'
+import { useStores } from '@/app/stores/hooks/useStores'
+import { useDashboardStore } from '../../../stores/dashboardStore'
 import { formatCurrency, formatCompactNumber } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
-import { getISOWeek, getISOWeekYear } from 'date-fns'
+import { format, addDays, subDays, startOfWeek, endOfWeek, addWeeks, subWeeks, startOfYear, endOfYear, addYears, subYears } from 'date-fns'
 
 // ── Types ──────────────────────────────────────────
 type Granularity = 'day' | 'week' | 'month' | 'year'
+type ChartStyle = 'bar' | 'smooth-line' | 'line-dot' | 'bar-smooth' | 'bar-line-dot'
 
 interface TrendPoint {
   label: string
   grossSales: number
-  netProfit: number
   year: number
   sortKey: string
+  isFuture?: boolean
 }
 
-const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+// Multi-store data point: { label, sortKey, year, total, isFuture, [storeId]: grossSales, ... }
+interface MultiStoreTrendPoint {
+  label: string
+  sortKey: string
+  year: number
+  total: number
+  isFuture?: boolean
+  [key: string]: string | number | boolean | undefined
+}
+
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 const GRAN_OPTIONS: { value: Granularity; label: string }[] = [
   { value: 'day', label: 'Day' },
@@ -31,109 +58,303 @@ const GRAN_OPTIONS: { value: Granularity; label: string }[] = [
   { value: 'year', label: 'Year' },
 ]
 
-const DEFAULT_COUNT: Record<Granularity, number> = { day: 30, week: 12, month: 12, year: 100 }
-const MIN_COUNT: Record<Granularity, number> = { day: 7, week: 4, month: 3, year: 2 }
-const ZOOM_STEP: Record<Granularity, number> = { day: 3, week: 2, month: 1, year: 1 }
+// Curated color palette for multi-store lines
+const STORE_COLORS = [
+  '#6366f1', // indigo
+  '#10b981', // emerald
+  '#f59e0b', // amber
+  '#ef4444', // red
+  '#8b5cf6', // violet
+  '#06b6d4', // cyan
+  '#f97316', // orange
+  '#ec4899', // pink
+]
 
-// ── Aggregation helpers ────────────────────────────
-function aggregateByDay(raw: RawDailyStat[]): TrendPoint[] {
-  return raw.map(r => {
-    const d = new Date(r.date + 'T00:00:00')
-    return {
-      label: `${SHORT_MONTHS[d.getMonth()]} ${d.getDate()} '${String(d.getFullYear()).slice(2)}`,
-      grossSales: r.grossSales,
-      netProfit: r.netProfit,
-      year: d.getFullYear(),
-      sortKey: r.date,
-    }
-  })
-}
+// ── Aggregation helpers (Fixed Windows) ────────────
 
-function aggregateByWeek(raw: RawDailyStat[]): TrendPoint[] {
-  const map = new Map<string, { gs: number; np: number; year: number }>()
-  for (const r of raw) {
-    const d = new Date(r.date + 'T00:00:00')
-    const w = getISOWeek(d)
-    const wy = getISOWeekYear(d)
-    const key = `${wy}-W${String(w).padStart(2, '0')}`
-    const ex = map.get(key)
-    if (ex) { ex.gs += r.grossSales; ex.np += r.netProfit }
-    else map.set(key, { gs: r.grossSales, np: r.netProfit, year: wy })
-  }
-  return Array.from(map.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, v]) => ({
-      label: `W${key.split('-W')[1]} '${String(v.year).slice(2)}`,
-      grossSales: v.gs, netProfit: v.np, year: v.year, sortKey: key,
-    }))
-}
+// DAY (24 hours)
+function aggregateHourly(raw: RawHourlyStat[]): TrendPoint[] {
+  const map = new Map(raw.map(r => [r.hour, r.grossSales]))
+  const points: TrendPoint[] = []
+  const currentHour = new Date().getHours() // Note: We don't mark hourly future points yet, usually 0 is fine
 
-function aggregateByMonth(raw: RawDailyStat[]): TrendPoint[] {
-  const map = new Map<string, { gs: number; np: number }>()
-  for (const r of raw) {
-    const d = new Date(r.date + 'T00:00:00')
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    const ex = map.get(key)
-    if (ex) { ex.gs += r.grossSales; ex.np += r.netProfit }
-    else map.set(key, { gs: r.grossSales, np: r.netProfit })
-  }
-  return Array.from(map.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, v]) => {
-      const [yr, mo] = key.split('-').map(Number)
-      return {
-        label: `${SHORT_MONTHS[mo - 1]} '${String(yr).slice(2)}`,
-        grossSales: v.gs, netProfit: v.np, year: yr, sortKey: key,
-      }
+  for (let h = 0; h < 24; h++) {
+    const ampm = h >= 12 ? 'PM' : 'AM'
+    const hr12 = h % 12 === 0 ? 12 : h % 12
+    points.push({
+      label: `${hr12}${ampm}`,
+      sortKey: String(h).padStart(2, '0'),
+      year: 0, // not used for day
+      grossSales: map.get(h) || 0,
     })
+  }
+  return points
 }
 
-function aggregateByYear(raw: RawDailyStat[]): TrendPoint[] {
-  const map = new Map<number, { gs: number; np: number }>()
+function aggregateMultiStoreHourly(raw: RawHourlyStoreStat[], storeIds: string[]): MultiStoreTrendPoint[] {
+  const map = new Map<number, Map<string, number>>()
+  for (const r of raw) {
+    if (!map.has(r.hour)) map.set(r.hour, new Map())
+    map.get(r.hour)!.set(r.storeId, r.grossSales)
+  }
+
+  const points: MultiStoreTrendPoint[] = []
+  for (let h = 0; h < 24; h++) {
+    const ampm = h >= 12 ? 'PM' : 'AM'
+    const hr12 = h % 12 === 0 ? 12 : h % 12
+    const pt: MultiStoreTrendPoint = {
+      label: `${hr12}${ampm}`,
+      sortKey: String(h).padStart(2, '0'),
+      year: 0,
+      total: 0,
+    }
+    const hrMap = map.get(h)
+    for (const sid of storeIds) {
+      const val = hrMap?.get(sid) || 0
+      pt[sid] = val
+      pt.total += val
+    }
+    points.push(pt)
+  }
+  return points
+}
+
+// WEEK (Sun-Sat)
+function aggregateWeekly(raw: RawDailyStat[], startD: Date): TrendPoint[] {
+  const map = new Map(raw.map(r => [r.date, r.grossSales]))
+  const points: TrendPoint[] = []
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(startD, i)
+    const dStr = format(d, 'yyyy-MM-dd')
+    points.push({
+      label: DAYS_OF_WEEK[i],
+      sortKey: dStr,
+      year: d.getFullYear(),
+      grossSales: map.get(dStr) || 0,
+      isFuture: dStr > todayStr,
+    })
+  }
+  return points
+}
+
+function aggregateMultiStoreWeekly(raw: RawDailyStoreStat[], startD: Date, storeIds: string[]): MultiStoreTrendPoint[] {
+  const map = new Map<string, Map<string, number>>()
+  for (const r of raw) {
+    if (!map.has(r.date)) map.set(r.date, new Map())
+    map.get(r.date)!.set(r.storeId, r.grossSales)
+  }
+  
+  const points: MultiStoreTrendPoint[] = []
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(startD, i)
+    const dStr = format(d, 'yyyy-MM-dd')
+    const pt: MultiStoreTrendPoint = {
+      label: DAYS_OF_WEEK[i],
+      sortKey: dStr,
+      year: d.getFullYear(),
+      total: 0,
+      isFuture: dStr > todayStr,
+    }
+    const dayMap = map.get(dStr)
+    for (const sid of storeIds) {
+      const val = dayMap?.get(sid) || 0
+      pt[sid] = val
+      pt.total += val
+    }
+    points.push(pt)
+  }
+  return points
+}
+
+// MONTH (Jan-Dec)
+function aggregateMonthly(raw: RawDailyStat[], targetYear: number): TrendPoint[] {
+  const map = new Map<number, number>()
+  for (const r of raw) {
+    const monthIdx = new Date(r.date + 'T00:00:00').getMonth()
+    map.set(monthIdx, (map.get(monthIdx) || 0) + r.grossSales)
+  }
+
+  const points: TrendPoint[] = []
+  const now = new Date()
+  const isCurrentYear = targetYear === now.getFullYear()
+  const currentMonthIdx = now.getMonth()
+
+  for (let i = 0; i < 12; i++) {
+    points.push({
+      label: SHORT_MONTHS[i],
+      sortKey: String(i).padStart(2, '0'),
+      year: targetYear,
+      grossSales: map.get(i) || 0,
+      isFuture: isCurrentYear && i > currentMonthIdx,
+    })
+  }
+  return points
+}
+
+function aggregateMultiStoreMonthly(raw: RawDailyStoreStat[], targetYear: number, storeIds: string[]): MultiStoreTrendPoint[] {
+  const map = new Map<number, Map<string, number>>()
+  for (const r of raw) {
+    const monthIdx = new Date(r.date + 'T00:00:00').getMonth()
+    if (!map.has(monthIdx)) map.set(monthIdx, new Map())
+    const mMap = map.get(monthIdx)!
+    mMap.set(r.storeId, (mMap.get(r.storeId) || 0) + r.grossSales)
+  }
+
+  const points: MultiStoreTrendPoint[] = []
+  const now = new Date()
+  const isCurrentYear = targetYear === now.getFullYear()
+  const currentMonthIdx = now.getMonth()
+
+  for (let i = 0; i < 12; i++) {
+    const pt: MultiStoreTrendPoint = {
+      label: SHORT_MONTHS[i],
+      sortKey: String(i).padStart(2, '0'),
+      year: targetYear,
+      total: 0,
+      isFuture: isCurrentYear && i > currentMonthIdx,
+    }
+    const mMap = map.get(i)
+    for (const sid of storeIds) {
+      const val = mMap?.get(sid) || 0
+      pt[sid] = val
+      pt.total += val
+    }
+    points.push(pt)
+  }
+  return points
+}
+
+// YEAR (7 years ending at targetYear)
+function aggregateYearly(raw: RawDailyStat[], targetYear: number): TrendPoint[] {
+  const map = new Map<number, number>()
   for (const r of raw) {
     const yr = new Date(r.date + 'T00:00:00').getFullYear()
-    const ex = map.get(yr)
-    if (ex) { ex.gs += r.grossSales; ex.np += r.netProfit }
-    else map.set(yr, { gs: r.grossSales, np: r.netProfit })
+    map.set(yr, (map.get(yr) || 0) + r.grossSales)
   }
-  return Array.from(map.entries())
-    .sort(([a], [b]) => a - b)
-    .map(([yr, v]) => ({
-      label: String(yr), grossSales: v.gs, netProfit: v.np, year: yr, sortKey: String(yr),
-    }))
+
+  const points: TrendPoint[] = []
+  for (let i = 6; i >= 0; i--) {
+    const yr = targetYear - i
+    points.push({
+      label: String(yr),
+      sortKey: String(yr),
+      year: yr,
+      grossSales: map.get(yr) || 0,
+    })
+  }
+  return points
 }
 
-function aggregate(raw: RawDailyStat[], g: Granularity): TrendPoint[] {
-  switch (g) {
-    case 'day': return aggregateByDay(raw)
-    case 'week': return aggregateByWeek(raw)
-    case 'month': return aggregateByMonth(raw)
-    case 'year': return aggregateByYear(raw)
+function aggregateMultiStoreYearly(raw: RawDailyStoreStat[], targetYear: number, storeIds: string[]): MultiStoreTrendPoint[] {
+  const map = new Map<number, Map<string, number>>()
+  for (const r of raw) {
+    const yr = new Date(r.date + 'T00:00:00').getFullYear()
+    if (!map.has(yr)) map.set(yr, new Map())
+    const yMap = map.get(yr)!
+    yMap.set(r.storeId, (yMap.get(r.storeId) || 0) + r.grossSales)
   }
-}
 
-// ── Year boundary detection ────────────────────────
-function getYearBoundaryLabels(points: TrendPoint[]): string[] {
-  const labels: string[] = []
-  for (let i = 1; i < points.length; i++) {
-    if (points[i].year !== points[i - 1].year) {
-      labels.push(points[i].label)
+  const points: MultiStoreTrendPoint[] = []
+  for (let i = 6; i >= 0; i--) {
+    const yr = targetYear - i
+    const pt: MultiStoreTrendPoint = {
+      label: String(yr),
+      sortKey: String(yr),
+      year: yr,
+      total: 0,
     }
+    const yMap = map.get(yr)
+    for (const sid of storeIds) {
+      const val = yMap?.get(sid) || 0
+      pt[sid] = val
+      pt.total += val
+    }
+    points.push(pt)
   }
-  return labels
+  return points
 }
 
-// ── Custom Tooltip ─────────────────────────────────
-function CustomTooltip({ active, payload, label }: any) {
+// ── SVG Icons ──────────────────────────────────────
+function BarIcon({ active }: { active?: boolean }) {
+  return (
+    <svg viewBox="0 0 20 16" className="h-4 w-4" fill="none">
+      <rect x="2" y="6" width="4" height="10" rx="1" fill={active ? 'currentColor' : 'currentColor'} opacity={active ? 1 : 0.4} />
+      <rect x="8" y="2" width="4" height="14" rx="1" fill={active ? 'currentColor' : 'currentColor'} opacity={active ? 1 : 0.4} />
+      <rect x="14" y="8" width="4" height="8" rx="1" fill={active ? 'currentColor' : 'currentColor'} opacity={active ? 1 : 0.4} />
+    </svg>
+  )
+}
+
+function SmoothLineIcon({ active }: { active?: boolean }) {
+  return (
+    <svg viewBox="0 0 20 16" className="h-4 w-4" fill="none">
+      <path d="M2 12 C5 12, 6 4, 10 4 C14 4, 15 10, 18 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity={active ? 1 : 0.4} />
+    </svg>
+  )
+}
+
+function LineDotIcon({ active }: { active?: boolean }) {
+  return (
+    <svg viewBox="0 0 20 16" className="h-4 w-4" fill="none">
+      <path d="M2 12 L7 5 L13 8 L18 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity={active ? 1 : 0.4} />
+      <circle cx="2" cy="12" r="1.5" fill="currentColor" opacity={active ? 1 : 0.4} />
+      <circle cx="7" cy="5" r="1.5" fill="currentColor" opacity={active ? 1 : 0.4} />
+      <circle cx="13" cy="8" r="1.5" fill="currentColor" opacity={active ? 1 : 0.4} />
+      <circle cx="18" cy="3" r="1.5" fill="currentColor" opacity={active ? 1 : 0.4} />
+    </svg>
+  )
+}
+
+function BarSmoothIcon({ active }: { active?: boolean }) {
+  return (
+    <svg viewBox="0 0 20 16" className="h-4 w-4" fill="none">
+      <rect x="2" y="8" width="3" height="8" rx="0.5" fill="currentColor" opacity={active ? 0.3 : 0.15} />
+      <rect x="8.5" y="5" width="3" height="11" rx="0.5" fill="currentColor" opacity={active ? 0.3 : 0.15} />
+      <rect x="15" y="10" width="3" height="6" rx="0.5" fill="currentColor" opacity={active ? 0.3 : 0.15} />
+      <path d="M3.5 7 C6 7, 7 3, 10 3 C13 3, 14 9, 16.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity={active ? 1 : 0.4} />
+    </svg>
+  )
+}
+
+function BarLineDotIcon({ active }: { active?: boolean }) {
+  return (
+    <svg viewBox="0 0 20 16" className="h-4 w-4" fill="none">
+      <rect x="2" y="8" width="3" height="8" rx="0.5" fill="currentColor" opacity={active ? 0.3 : 0.15} />
+      <rect x="8.5" y="5" width="3" height="11" rx="0.5" fill="currentColor" opacity={active ? 0.3 : 0.15} />
+      <rect x="15" y="10" width="3" height="6" rx="0.5" fill="currentColor" opacity={active ? 0.3 : 0.15} />
+      <path d="M3.5 7 L10 3 L16.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity={active ? 1 : 0.4} />
+      <circle cx="3.5" cy="7" r="1.5" fill="currentColor" opacity={active ? 1 : 0.4} />
+      <circle cx="10" cy="3" r="1.5" fill="currentColor" opacity={active ? 1 : 0.4} />
+      <circle cx="16.5" cy="9" r="1.5" fill="currentColor" opacity={active ? 1 : 0.4} />
+    </svg>
+  )
+}
+
+const CHART_STYLE_OPTIONS: { value: ChartStyle; label: string; Icon: React.FC<{ active?: boolean }> }[] = [
+  { value: 'bar', label: 'Bar', Icon: BarIcon },
+  { value: 'smooth-line', label: 'Smooth Line', Icon: SmoothLineIcon },
+  { value: 'line-dot', label: 'Line Dot', Icon: LineDotIcon },
+  { value: 'bar-smooth', label: 'Bar + Smooth', Icon: BarSmoothIcon },
+  { value: 'bar-line-dot', label: 'Bar + Line Dot', Icon: BarLineDotIcon },
+]
+
+// ── Custom Tooltips ────────────────────────────────
+function SingleStoreTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   const d = payload[0]?.payload as TrendPoint | undefined
   if (!d) return null
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-xl backdrop-blur-sm min-w-[200px]">
+    <div className="rounded-xl border border-border bg-card p-4 shadow-xl backdrop-blur-sm min-w-[180px]">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
         {label}
       </p>
-      <div className="space-y-1.5">
+      {d.isFuture ? (
+        <p className="text-sm font-medium text-muted-foreground italic">No data yet</p>
+      ) : (
         <div className="flex items-center justify-between gap-6">
           <div className="flex items-center gap-2">
             <div className="h-2.5 w-2.5 rounded-full bg-primary" />
@@ -141,234 +362,427 @@ function CustomTooltip({ active, payload, label }: any) {
           </div>
           <span className="text-sm font-bold text-foreground">{formatCurrency(d.grossSales)}</span>
         </div>
-        <div className="flex items-center justify-between gap-6">
-          <div className="flex items-center gap-2">
-            <div className="h-2.5 w-2.5 rounded-full bg-success" />
-            <span className="text-sm text-foreground">Net Profit</span>
-          </div>
-          <span className="text-sm font-bold text-foreground">{formatCurrency(d.netProfit)}</span>
-        </div>
+      )}
+    </div>
+  )
+}
+
+function MultiStoreTooltip({
+  active, payload, label, storeMap,
+}: any & { storeMap: Map<string, { name: string; color: string }> }) {
+  if (!active || !payload?.length) return null
+  const point = payload[0]?.payload as MultiStoreTrendPoint | undefined
+  if (!point) return null
+
+  if (point.isFuture) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-4 shadow-xl backdrop-blur-sm min-w-[180px]">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{label}</p>
+        <p className="text-sm font-medium text-muted-foreground italic">No data yet</p>
       </div>
+    )
+  }
+
+  const entries = payload
+    .filter((p: any) => p.dataKey !== 'total')
+    .map((p: any) => ({
+      storeId: p.dataKey,
+      value: p.value || 0,
+      color: p.color || p.stroke || 'var(--muted-foreground)',
+      name: storeMap?.get(p.dataKey)?.name || p.dataKey,
+    }))
+    .sort((a: any, b: any) => b.value - a.value)
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-xl backdrop-blur-sm min-w-[220px] max-w-[320px]">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+        {label}
+      </p>
+      <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+        {entries.map((e: any) => (
+          <div key={e.storeId} className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: e.color }} />
+              <span className="text-sm text-foreground truncate">{e.name}</span>
+            </div>
+            <span className="text-sm font-bold text-foreground whitespace-nowrap">{formatCurrency(e.value)}</span>
+          </div>
+        ))}
+      </div>
+      {entries.length > 1 && (
+        <div className="border-t border-border/50 mt-2 pt-2 flex items-center justify-between">
+          <span className="text-xs font-semibold text-muted-foreground">Total</span>
+          <span className="text-sm font-bold text-foreground">{formatCurrency(point.total)}</span>
+        </div>
+      )}
     </div>
   )
 }
 
 // ── Main Component ─────────────────────────────────
 export function MonthlyGrossTrend() {
-  const { data: rawData, isLoading } = useGrossTrendData()
+  const { selectedBranch } = useDashboardStore()
+  const isAllStores = selectedBranch === 'all'
+  const { data: stores } = useStores()
+
   const [mounted, setMounted] = useState(false)
   const [granularity, setGranularity] = useState<Granularity>('month')
-  const chartContainerRef = useRef<HTMLDivElement>(null)
-
-  // View range state (indices into the aggregated data array)
-  const [viewStart, setViewStart] = useState(0)
-  const [viewEnd, setViewEnd] = useState(11)
-  // Ref mirror for event handlers (avoids stale closures)
-  const viewRef = useRef({ start: 0, end: 11 })
+  const [chartStyle, setChartStyle] = useState<ChartStyle>('smooth-line')
+  const [offset, setOffset] = useState(0) // 0 = current period, -1 = previous, etc.
 
   useEffect(() => { setMounted(true) }, [])
 
-  // Aggregate data based on granularity
-  const allData = useMemo(() => {
-    if (!rawData || rawData.length === 0) return []
-    return aggregate(rawData, granularity)
-  }, [rawData, granularity])
+  // Reset offset when granularity changes
+  useEffect(() => { setOffset(0) }, [granularity])
 
-  // Reset view range when granularity or data changes
-  useEffect(() => {
-    if (allData.length === 0) return
-    const count = Math.min(DEFAULT_COUNT[granularity], allData.length)
-    const s = Math.max(0, allData.length - count)
-    const e = allData.length - 1
-    setViewStart(s)
-    setViewEnd(e)
-    viewRef.current = { start: s, end: e }
-  }, [granularity, allData.length])
+  // Build store lookup
+  const storeMap = useMemo(() => {
+    const map = new Map<string, { name: string; color: string }>()
+    if (!stores) return map
+    const activeStores = (stores as any[]).filter((s: any) => !s.deleted_at)
+    activeStores.forEach((s: any, i: number) => {
+      map.set(s.store_id, {
+        name: s.store_name || `Store ${i + 1}`,
+        color: STORE_COLORS[i % STORE_COLORS.length],
+      })
+    })
+    return map
+  }, [stores])
 
-  // Sync ref on state change
-  useEffect(() => {
-    viewRef.current = { start: viewStart, end: viewEnd }
-  }, [viewStart, viewEnd])
+  const storeIds = useMemo(() => Array.from(storeMap.keys()), [storeMap])
 
-  // Apply a new view range with clamping
-  const applyRange = useCallback((s: number, e: number) => {
-    const max = allData.length - 1
-    if (max < 0) return
-    let ns = Math.round(s)
-    let ne = Math.round(e)
-    if (ns < 0) { ne -= ns; ns = 0 }
-    if (ne > max) { ns -= (ne - max); ne = max }
-    ns = Math.max(0, ns)
-    ne = Math.min(max, ne)
-    if (ne - ns + 1 < MIN_COUNT[granularity]) return
-    setViewStart(ns)
-    setViewEnd(ne)
-    viewRef.current = { start: ns, end: ne }
-  }, [allData.length, granularity])
+  // Compute date ranges based on granularity and offset
+  const { targetDateStr, startDateStr, endDateStr, dateLabel, startObj } = useMemo(() => {
+    const now = new Date()
+    let tStr = '', sStr = '', eStr = '', lbl = '', sObj = now
 
-  // ── Wheel zoom ───────────────────────────────────
-  useEffect(() => {
-    const el = chartContainerRef.current
-    if (!el || allData.length === 0) return
-
-    const handler = (e: WheelEvent) => {
-      if (granularity === 'year') return
-      e.preventDefault()
-      const { start, end } = viewRef.current
-      const count = end - start + 1
-      const step = ZOOM_STEP[granularity]
-      const delta = e.deltaY > 0 ? step : -step
-      const newCount = count + delta
-      if (newCount < MIN_COUNT[granularity] || newCount > allData.length) return
-
-      const rect = el.getBoundingClientRect()
-      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-      const leftDelta = Math.round(delta * ratio)
-      const rightDelta = delta - leftDelta
-      applyRange(start - leftDelta, end + rightDelta)
+    if (granularity === 'day') {
+      const target = addDays(now, offset)
+      tStr = format(target, 'yyyy-MM-dd')
+      lbl = format(target, 'MMM d, yyyy')
+    } else if (granularity === 'week') {
+      const targetWeek = addWeeks(now, offset)
+      const s = startOfWeek(targetWeek, { weekStartsOn: 0 }) // Sunday
+      const e = endOfWeek(targetWeek, { weekStartsOn: 0 })   // Saturday
+      sStr = format(s, 'yyyy-MM-dd')
+      eStr = format(e, 'yyyy-MM-dd')
+      sObj = s
+      lbl = `${format(s, 'MMM d')} – ${format(e, 'MMM d, yyyy')}`
+    } else if (granularity === 'month') {
+      const targetYear = now.getFullYear() + offset
+      const s = startOfYear(new Date(targetYear, 0, 1))
+      const e = endOfYear(s)
+      sStr = format(s, 'yyyy-MM-dd')
+      eStr = format(e, 'yyyy-MM-dd')
+      sObj = s
+      lbl = String(targetYear)
+    } else if (granularity === 'year') {
+      const endYr = now.getFullYear() + offset
+      const startYr = endYr - 6
+      const s = startOfYear(new Date(startYr, 0, 1))
+      const e = endOfYear(new Date(endYr, 0, 1))
+      sStr = format(s, 'yyyy-MM-dd')
+      eStr = format(e, 'yyyy-MM-dd')
+      sObj = s
+      lbl = `${startYr} – ${endYr}`
     }
 
-    el.addEventListener('wheel', handler, { passive: false })
-    return () => el.removeEventListener('wheel', handler)
-  }, [allData.length, granularity, applyRange])
+    return { targetDateStr: tStr, startDateStr: sStr, endDateStr: eStr, dateLabel: lbl, startObj: sObj }
+  }, [granularity, offset])
 
-  // ── Mouse drag to pan ────────────────────────────
-  const dragRef = useRef<{ startX: number; startRange: { start: number; end: number } } | null>(null)
+  // Data fetching
+  const { data: dailyRaw, isLoading: dailyLoading } = useGrossTrendData(startDateStr, endDateStr)
+  const { data: multiDailyRaw, isLoading: multiDailyLoading } = useMultiStoreGrossTrendData(startDateStr, endDateStr)
+  const { data: hourlyRaw, isLoading: hourlyLoading } = useHourlyGrossTrendData(targetDateStr)
+  const { data: multiHourlyRaw, isLoading: multiHourlyLoading } = useMultiStoreHourlyGrossTrendData(targetDateStr)
 
-  useEffect(() => {
-    const el = chartContainerRef.current
-    if (!el || allData.length === 0) return
+  // Determine current dataset and loading state based on selections
+  let allData: any[] = []
+  let isLoading = false
 
-    const onDown = (e: MouseEvent) => {
-      dragRef.current = { startX: e.clientX, startRange: { ...viewRef.current } }
-      el.style.cursor = 'grabbing'
-      e.preventDefault()
-    }
-    const onMove = (e: MouseEvent) => {
-      if (!dragRef.current) return
-      const rect = el.getBoundingClientRect()
-      const { startX, startRange } = dragRef.current
-      const count = startRange.end - startRange.start + 1
-      const pointWidth = rect.width / count
-      const shift = Math.round((startX - e.clientX) / pointWidth)
-      applyRange(startRange.start + shift, startRange.end + shift)
-    }
-    const onUp = () => {
-      if (dragRef.current) {
-        dragRef.current = null
-        if (el) el.style.cursor = 'grab'
-      }
-    }
+  if (granularity === 'day') {
+    isLoading = isAllStores ? multiHourlyLoading : hourlyLoading
+    allData = isAllStores && multiHourlyRaw
+      ? aggregateMultiStoreHourly(multiHourlyRaw, storeIds)
+      : hourlyRaw ? aggregateHourly(hourlyRaw) : []
+  } else if (granularity === 'week') {
+    isLoading = isAllStores ? multiDailyLoading : dailyLoading
+    allData = isAllStores && multiDailyRaw
+      ? aggregateMultiStoreWeekly(multiDailyRaw, startObj, storeIds)
+      : dailyRaw ? aggregateWeekly(dailyRaw, startObj) : []
+  } else if (granularity === 'month') {
+    isLoading = isAllStores ? multiDailyLoading : dailyLoading
+    const tgtYr = startObj.getFullYear()
+    allData = isAllStores && multiDailyRaw
+      ? aggregateMultiStoreMonthly(multiDailyRaw, tgtYr, storeIds)
+      : dailyRaw ? aggregateMonthly(dailyRaw, tgtYr) : []
+  } else if (granularity === 'year') {
+    isLoading = isAllStores ? multiDailyLoading : dailyLoading
+    const endYr = startObj.getFullYear() + 6 // endYr was offset + now.getFullYear() -> offset = startYr + 6 -> startObj is startYr
+    allData = isAllStores && multiDailyRaw
+      ? aggregateMultiStoreYearly(multiDailyRaw, endYr, storeIds)
+      : dailyRaw ? aggregateYearly(dailyRaw, endYr) : []
+  }
 
-    el.addEventListener('mousedown', onDown)
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    return () => {
-      el.removeEventListener('mousedown', onDown)
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-  }, [allData.length, applyRange])
-
-  // ── Touch: pinch zoom + drag pan ─────────────────
-  const touchRef = useRef<{
-    mode: 'pan' | 'pinch'
-    startX: number
-    startRange: { start: number; end: number }
-    initialDist?: number
-  } | null>(null)
-
-  useEffect(() => {
-    const el = chartContainerRef.current
-    if (!el || allData.length === 0) return
-
-    const dist = (t: TouchList) => {
-      const dx = t[0].clientX - t[1].clientX
-      const dy = t[0].clientY - t[1].clientY
-      return Math.sqrt(dx * dx + dy * dy)
-    }
-
-    const onStart = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
-        e.preventDefault()
-        touchRef.current = {
-          mode: 'pinch', startX: 0, initialDist: dist(e.touches),
-          startRange: { ...viewRef.current },
-        }
-      } else if (e.touches.length === 1) {
-        touchRef.current = {
-          mode: 'pan', startX: e.touches[0].clientX,
-          startRange: { ...viewRef.current },
-        }
-      }
-    }
-
-    const onMove = (e: TouchEvent) => {
-      if (!touchRef.current) return
-      const { mode, startRange } = touchRef.current
-
-      if (mode === 'pinch' && e.touches.length === 2 && touchRef.current.initialDist) {
-        e.preventDefault()
-        const scale = touchRef.current.initialDist / dist(e.touches)
-        const origCount = startRange.end - startRange.start + 1
-        const newCount = Math.max(MIN_COUNT[granularity], Math.min(allData.length, Math.round(origCount * scale)))
-        const center = (startRange.start + startRange.end) / 2
-        applyRange(Math.round(center - newCount / 2), Math.round(center + newCount / 2 - 1))
-      } else if (mode === 'pan' && e.touches.length === 1) {
-        const rect = el.getBoundingClientRect()
-        const count = startRange.end - startRange.start + 1
-        const pointWidth = rect.width / count
-        const shift = Math.round((touchRef.current.startX - e.touches[0].clientX) / pointWidth)
-        applyRange(startRange.start + shift, startRange.end + shift)
-      }
-    }
-
-    const onEnd = () => { touchRef.current = null }
-
-    el.addEventListener('touchstart', onStart, { passive: false })
-    el.addEventListener('touchmove', onMove, { passive: false })
-    el.addEventListener('touchend', onEnd)
-    return () => {
-      el.removeEventListener('touchstart', onStart)
-      el.removeEventListener('touchmove', onMove)
-      el.removeEventListener('touchend', onEnd)
-    }
-  }, [allData.length, granularity, applyRange])
-
-  // ── Computed values ──────────────────────────────
-  const visibleData = useMemo(() => {
-    if (allData.length === 0) return []
-    return allData.slice(viewStart, viewEnd + 1)
-  }, [allData, viewStart, viewEnd])
-
-  const yearBoundaries = useMemo(() => getYearBoundaryLabels(visibleData), [visibleData])
-
+  // Summary (single-store mode or total in multi-store mode, disregarding future days)
   const summary = useMemo(() => {
     if (allData.length === 0) return null
-    const withSales = allData.filter(d => d.grossSales > 0)
-    const totalGross = withSales.reduce((s, d) => s + d.grossSales, 0)
-    const best = withSales.reduce((b, d) => d.grossSales > b.grossSales ? d : b, withSales[0] || { label: 'N/A', grossSales: 0 })
-    const avg = withSales.length > 0 ? totalGross / withSales.length : 0
 
-    // MoM for the latest 2 visible points
-    const vWithSales = visibleData.filter(d => d.grossSales > 0)
+    const getGross = (d: any) => isAllStores ? (d as MultiStoreTrendPoint).total : (d as TrendPoint).grossSales
+    const isFuture = (d: any) => d.isFuture === true
+
+    const withSales = allData.filter(d => !isFuture(d) && getGross(d) > 0)
+    const validDataPoints = allData.filter(d => !isFuture(d)) // Include days with 0 sales for average
+
+    const totalGross = withSales.reduce((s, d) => s + getGross(d), 0)
+    const best = withSales.reduce((b, d) => getGross(d) > getGross(b) ? d : b, withSales[0] || { label: 'N/A' })
+    const avg = validDataPoints.length > 0 ? totalGross / validDataPoints.length : 0
+
+    const vWithSales = allData.filter(d => getGross(d) > 0) // Look back even across future gap if needed, but safer to use valid
     let mom = 0
     if (vWithSales.length >= 2) {
-      const cur = vWithSales[vWithSales.length - 1].grossSales
-      const prev = vWithSales[vWithSales.length - 2].grossSales
+      const cur = getGross(vWithSales[vWithSales.length - 1])
+      const prev = getGross(vWithSales[vWithSales.length - 2])
       if (prev > 0) mom = Math.round(((cur - prev) / prev) * 1000) / 10
     }
 
-    return { ytdGross: totalGross, avg, bestLabel: best?.label || 'N/A', bestValue: best?.grossSales || 0, mom, hasMom: vWithSales.length >= 2 }
-  }, [allData, visibleData])
+    return {
+      ytdGross: totalGross,
+      avg,
+      bestLabel: (best as any)?.label || 'N/A',
+      bestValue: getGross(best) || 0,
+      mom,
+      hasMom: vWithSales.length >= 2,
+    }
+  }, [allData, isAllStores])
 
-  // Scroll indicator percentages
-  const scrollPct = allData.length > 0
-    ? { left: (viewStart / allData.length) * 100, width: ((viewEnd - viewStart + 1) / allData.length) * 100 }
-    : { left: 0, width: 100 }
+  // ── Chart rendering ──────────────────────────────
+  const chartMargin = { top: 10, right: 16, left: 0, bottom: 0 }
+  const xAxisProps = {
+    dataKey: 'label',
+    axisLine: false,
+    tickLine: false,
+    tick: { fontSize: 11, fill: 'var(--muted-foreground)' },
+    dy: 8,
+    interval: granularity === 'day' ? 3 : 0, // Show every 4th hour label on day view to avoid crowding
+    angle: 0,
+    textAnchor: 'middle' as 'middle',
+    height: 30,
+  }
+  const yAxisProps = {
+    axisLine: false,
+    tickLine: false,
+    tick: { fontSize: 11, fill: 'var(--muted-foreground)' },
+    tickFormatter: (v: number) => formatCompactNumber(v),
+    width: 55,
+  }
+
+  function renderSingleStoreChart() {
+    const data = allData as TrendPoint[]
+    
+    // Future points mapping: set grossSales to null so they don't plot, but preserve the point on X axis
+    const chartData = data.map(d => ({
+      ...d,
+      chartGross: d.isFuture ? null : d.grossSales
+    }))
+
+    switch (chartStyle) {
+      case 'bar':
+        return (
+          <BarChart data={chartData} margin={chartMargin}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
+            <XAxis {...xAxisProps} />
+            <YAxis {...yAxisProps} />
+            <Tooltip content={<SingleStoreTooltip />} cursor={{ fill: 'var(--muted)', opacity: 0.2 }} />
+            <Bar dataKey="chartGross" fill="var(--primary)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+          </BarChart>
+        )
+
+      case 'smooth-line':
+        return (
+          <LineChart data={chartData} margin={chartMargin}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
+            <XAxis {...xAxisProps} />
+            <YAxis {...yAxisProps} />
+            <Tooltip content={<SingleStoreTooltip />} />
+            <Line
+              type="monotone"
+              dataKey="chartGross"
+              stroke="var(--primary)"
+              strokeWidth={2.5}
+              dot={false}
+              connectNulls={false}
+              activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--primary)', fill: 'var(--card)' }}
+            />
+          </LineChart>
+        )
+
+      case 'line-dot':
+        return (
+          <LineChart data={chartData} margin={chartMargin}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
+            <XAxis {...xAxisProps} />
+            <YAxis {...yAxisProps} />
+            <Tooltip content={<SingleStoreTooltip />} />
+            <Line
+              type="linear"
+              dataKey="chartGross"
+              stroke="var(--primary)"
+              strokeWidth={2}
+              connectNulls={false}
+              dot={{ r: 3, fill: 'var(--primary)', strokeWidth: 0 }}
+              activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--primary)', fill: 'var(--card)' }}
+            />
+          </LineChart>
+        )
+
+      case 'bar-smooth':
+        return (
+          <ComposedChart data={chartData} margin={chartMargin}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
+            <XAxis {...xAxisProps} />
+            <YAxis {...yAxisProps} />
+            <Tooltip content={<SingleStoreTooltip />} cursor={{ fill: 'var(--muted)', opacity: 0.2 }} />
+            <Bar dataKey="chartGross" fill="var(--primary)" fillOpacity={0.15} radius={[4, 4, 0, 0]} maxBarSize={40} />
+            <Line
+              type="monotone"
+              dataKey="chartGross"
+              stroke="var(--primary)"
+              strokeWidth={2.5}
+              dot={false}
+              connectNulls={false}
+              activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--primary)', fill: 'var(--card)' }}
+            />
+          </ComposedChart>
+        )
+
+      case 'bar-line-dot':
+        return (
+          <ComposedChart data={chartData} margin={chartMargin}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
+            <XAxis {...xAxisProps} />
+            <YAxis {...yAxisProps} />
+            <Tooltip content={<SingleStoreTooltip />} cursor={{ fill: 'var(--muted)', opacity: 0.2 }} />
+            <Bar dataKey="chartGross" fill="var(--primary)" fillOpacity={0.15} radius={[4, 4, 0, 0]} maxBarSize={40} />
+            <Line
+              type="linear"
+              dataKey="chartGross"
+              stroke="var(--primary)"
+              strokeWidth={2}
+              connectNulls={false}
+              dot={{ r: 3, fill: 'var(--primary)', strokeWidth: 0 }}
+              activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--primary)', fill: 'var(--card)' }}
+            />
+          </ComposedChart>
+        )
+    }
+  }
+
+  function renderMultiStoreChart() {
+    const data = allData as MultiStoreTrendPoint[]
+    const tooltipContent = <MultiStoreTooltip storeMap={storeMap} />
+
+    const chartData = data.map(d => {
+      if (d.isFuture) {
+        // Null out all values
+        const empty: any = { label: d.label, isFuture: true, total: null }
+        storeIds.forEach(sid => empty[sid] = null)
+        return empty
+      }
+      return d
+    })
+
+    const renderStoreLines = (withDots: boolean, lineType: 'monotone' | 'linear' = 'monotone') =>
+      storeIds.map(sid => {
+        const info = storeMap.get(sid)
+        if (!info) return null
+        return (
+          <Line
+            key={sid}
+            type={lineType}
+            dataKey={sid}
+            stroke={info.color}
+            strokeWidth={2}
+            connectNulls={false}
+            dot={withDots ? { r: 2.5, fill: info.color, strokeWidth: 0 } : false}
+            activeDot={{ r: 4, strokeWidth: 2, stroke: info.color, fill: 'var(--card)' }}
+            name={info.name}
+          />
+        )
+      })
+
+    const renderTotalBar = () => (
+      <Bar dataKey="total" fill="var(--muted-foreground)" fillOpacity={0.1} radius={[4, 4, 0, 0]} maxBarSize={40} name="Total" />
+    )
+
+    switch (chartStyle) {
+      case 'bar':
+        return (
+          <BarChart data={chartData} margin={chartMargin}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
+            <XAxis {...xAxisProps} />
+            <YAxis {...yAxisProps} />
+            <Tooltip content={tooltipContent} cursor={{ fill: 'var(--muted)', opacity: 0.2 }} />
+            {storeIds.map(sid => {
+              const info = storeMap.get(sid)
+              if (!info) return null
+              return (
+                <Bar key={sid} dataKey={sid} fill={info.color} radius={[2, 2, 0, 0]} maxBarSize={24} name={info.name} />
+              )
+            })}
+          </BarChart>
+        )
+
+      case 'smooth-line':
+        return (
+          <LineChart data={chartData} margin={chartMargin}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
+            <XAxis {...xAxisProps} />
+            <YAxis {...yAxisProps} />
+            <Tooltip content={tooltipContent} />
+            {renderStoreLines(false)}
+          </LineChart>
+        )
+
+      case 'line-dot':
+        return (
+          <LineChart data={chartData} margin={chartMargin}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
+            <XAxis {...xAxisProps} />
+            <YAxis {...yAxisProps} />
+            <Tooltip content={tooltipContent} />
+            {renderStoreLines(true, 'linear')}
+          </LineChart>
+        )
+
+      case 'bar-smooth':
+        return (
+          <ComposedChart data={chartData} margin={chartMargin}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
+            <XAxis {...xAxisProps} />
+            <YAxis {...yAxisProps} />
+            <Tooltip content={tooltipContent} cursor={{ fill: 'var(--muted)', opacity: 0.2 }} />
+            {renderTotalBar()}
+            {renderStoreLines(false)}
+          </ComposedChart>
+        )
+
+      case 'bar-line-dot':
+        return (
+          <ComposedChart data={chartData} margin={chartMargin}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
+            <XAxis {...xAxisProps} />
+            <YAxis {...yAxisProps} />
+            <Tooltip content={tooltipContent} cursor={{ fill: 'var(--muted)', opacity: 0.2 }} />
+            {renderTotalBar()}
+            {renderStoreLines(true, 'linear')}
+          </ComposedChart>
+        )
+    }
+  }
 
   // ── Loading / empty states ───────────────────────
-  if (!mounted || isLoading) {
+  if (!mounted) {
     return (
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="animate-pulse space-y-4">
@@ -382,43 +796,64 @@ export function MonthlyGrossTrend() {
     )
   }
 
-  if (allData.length === 0) {
-    return (
-      <div className="rounded-xl border border-border bg-card p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-            <TrendingUp className="h-5 w-5 text-primary" />
-          </div>
-          <h3 className="text-sm font-medium text-muted-foreground">Monthly Gross Trend</h3>
-        </div>
-        <p className="text-sm text-muted-foreground text-center py-12">No sales data available yet.</p>
-      </div>
-    )
-  }
-
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden transition-all hover:border-primary/20">
+    <div className="rounded-xl border border-border bg-card overflow-hidden transition-all hover:border-primary/20 flex flex-col">
       {/* Header */}
-      <div className="p-6 pb-0">
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4">
+      <div className="p-6 pb-4">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
               <TrendingUp className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Gross Sales Trend</h3>
-              <div className="flex items-center gap-2">
-                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">
-                  {visibleData.length > 0
-                    ? `${visibleData[0].label} — ${visibleData[visibleData.length - 1].label}`
-                    : 'No data'}
-                </span>
-              </div>
+              <h3 className="text-sm font-medium text-foreground">Gross Sales Trend</h3>
+              <p className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
+                <Calendar className="h-3.5 w-3.5" />
+                {dateLabel}
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {/* Arrow Nav */}
+            <div className="flex items-center rounded-lg border border-border/50 bg-muted/50 p-0.5">
+              <button
+                onClick={() => setOffset(o => o - 1)}
+                className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground transition-all hover:shadow-sm"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-[11px] font-bold px-2 text-muted-foreground w-12 text-center uppercase tracking-wider">
+                {offset === 0 ? 'Now' : offset}
+              </span>
+              <button
+                onClick={() => setOffset(o => Math.min(0, o + 1))}
+                disabled={offset >= 0}
+                className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground transition-all disabled:opacity-30 disabled:hover:bg-transparent hover:shadow-sm"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Chart Style Picker */}
+            <div className="flex bg-muted rounded-lg p-0.5 border border-border/50">
+              {CHART_STYLE_OPTIONS.map(o => (
+                <button
+                  key={o.value}
+                  onClick={() => setChartStyle(o.value)}
+                  title={o.label}
+                  className={cn(
+                    'flex items-center justify-center gap-0.5 px-2 py-1 rounded-md transition-all',
+                    chartStyle === o.value
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <o.Icon active={chartStyle === o.value} />
+                </button>
+              ))}
+            </div>
+
             {/* Granularity Tabs */}
             <div className="flex bg-muted rounded-lg p-0.5 border border-border/50">
               {GRAN_OPTIONS.map(o => (
@@ -436,136 +871,59 @@ export function MonthlyGrossTrend() {
                 </button>
               ))}
             </div>
-
-            {/* MoM Badge */}
-            {summary?.hasMom && (
-              <div className={cn(
-                'flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap',
-                summary.mom > 0 ? 'bg-success/10 text-success'
-                  : summary.mom < 0 ? 'bg-destructive/10 text-destructive'
-                    : 'bg-muted text-muted-foreground'
-              )}>
-                {summary.mom > 0 ? <ArrowUpRight className="h-3.5 w-3.5" />
-                  : summary.mom < 0 ? <ArrowDownRight className="h-3.5 w-3.5" />
-                    : <Minus className="h-3.5 w-3.5" />}
-                {summary.mom > 0 ? '+' : ''}{summary.mom}%
-              </div>
-            )}
           </div>
         </div>
       </div>
 
-      {/* Chart Container — zoom & pan target */}
-      <div
-        ref={chartContainerRef}
-        className="px-2 sm:px-4 select-none"
-        style={{ cursor: 'grab', touchAction: 'none' }}
-      >
-        <div className="h-[280px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={visibleData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="grossGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.02} />
-                </linearGradient>
-                <linearGradient id="profitGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--success)" stopOpacity={0.2} />
-                  <stop offset="100%" stopColor="var(--success)" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
-              <XAxis
-                dataKey="label"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
-                dy={8}
-                interval={granularity === 'day' ? Math.max(0, Math.floor(visibleData.length / 10) - 1) : 0}
-                angle={visibleData.length > 14 ? -35 : 0}
-                textAnchor={visibleData.length > 14 ? 'end' : 'middle'}
-                height={visibleData.length > 14 ? 50 : 30}
-              />
-              <YAxis
-                axisLine={false}
-                tickLine={false}
-                tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
-                tickFormatter={v => formatCompactNumber(v)}
-                width={55}
-              />
-              <Tooltip content={<CustomTooltip />} />
-
-              {/* Year boundary reference lines */}
-              {yearBoundaries.map(label => (
-                <ReferenceLine
-                  key={`yr-${label}`}
-                  x={label}
-                  stroke="var(--muted-foreground)"
-                  strokeDasharray="6 4"
-                  strokeOpacity={0.5}
-                  strokeWidth={1.5}
-                />
-              ))}
-
-              <Area
-                type="monotone"
-                dataKey="grossSales"
-                stroke="var(--primary)"
-                strokeWidth={2.5}
-                fill="url(#grossGrad)"
-                dot={false}
-                activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--primary)', fill: 'var(--card)' }}
-              />
-              <Area
-                type="monotone"
-                dataKey="netProfit"
-                stroke="var(--success)"
-                strokeWidth={2}
-                fill="url(#profitGrad)"
-                dot={false}
-                activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--success)', fill: 'var(--card)' }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Scroll position indicator + Legend + Summary */}
-      <div className="p-6 pt-3">
-        {/* Scroll indicator bar */}
-        {allData.length > (viewEnd - viewStart + 1) && (
-          <div className="relative h-1.5 bg-muted rounded-full mb-4 overflow-hidden">
-            <div
-              className="absolute h-full bg-primary/30 rounded-full transition-all duration-150"
-              style={{ left: `${scrollPct.left}%`, width: `${scrollPct.width}%` }}
-            />
+      {/* Chart Container */}
+      <div className="px-2 sm:px-4 flex-1 min-h-[280px] relative">
+        {isLoading ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-card/50 backdrop-blur-[1px] z-10">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          </div>
+        ) : null}
+        
+        {allData.length === 0 && !isLoading ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <p className="text-sm text-muted-foreground">No sales data available for this period.</p>
+          </div>
+        ) : (
+          <div className="h-[280px] w-full mt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              {isAllStores ? renderMultiStoreChart() : renderSingleStoreChart()}
+            </ResponsiveContainer>
           </div>
         )}
+      </div>
 
-        {/* Zoom hint */}
-        {granularity !== 'year' && (
-          <p className="text-[10px] text-muted-foreground text-center mb-3 select-none">
-            Scroll to zoom · Drag to pan
-          </p>
-        )}
-
+      {/* Footer: Legend + Summary */}
+      <div className="p-6 pt-2">
         {/* Legend */}
-        <div className="flex items-center gap-5 mb-4">
-          <div className="flex items-center gap-1.5">
-            <div className="h-2 w-6 rounded-full bg-primary" />
-            <span className="text-[11px] text-muted-foreground font-medium">Gross Sales</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="h-2 w-6 rounded-full bg-success" />
-            <span className="text-[11px] text-muted-foreground font-medium">Net Profit</span>
-          </div>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-4 border-b border-border/50 pb-4">
+          {isAllStores ? (
+            storeIds.map(sid => {
+              const info = storeMap.get(sid)
+              if (!info) return null
+              return (
+                <div key={sid} className="flex items-center gap-1.5">
+                  <div className="h-2 w-6 rounded-full" style={{ backgroundColor: info.color }} />
+                  <span className="text-[11px] text-muted-foreground font-medium">{info.name}</span>
+                </div>
+              )
+            })
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-6 rounded-full bg-primary" />
+              <span className="text-[11px] text-muted-foreground font-medium">Gross Sales</span>
+            </div>
+          )}
         </div>
 
         {/* Summary */}
         {summary && (
-          <div className="grid grid-cols-3 gap-4 border-t border-border/50 pt-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="space-y-1">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total Gross</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total Sales</p>
               <p className="text-lg font-bold text-foreground tracking-tight">{formatCompactNumber(summary.ytdGross)}</p>
             </div>
             <div className="space-y-1">
@@ -578,6 +936,12 @@ export function MonthlyGrossTrend() {
                 <p className="text-lg font-bold text-foreground tracking-tight">{summary.bestLabel}</p>
                 <span className="text-[10px] text-primary font-semibold">{formatCompactNumber(summary.bestValue)}</span>
               </div>
+            </div>
+            <div className="space-y-1 md:text-right">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Status</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {offset === 0 ? 'Current window' : `${Math.abs(offset)} period${Math.abs(offset) > 1 ? 's' : ''} prior`}
+              </p>
             </div>
           </div>
         )}
