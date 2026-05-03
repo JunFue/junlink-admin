@@ -4,420 +4,38 @@ import { useMemo, useState, useEffect } from 'react'
 import {
   LineChart, Line, BarChart, Bar, ComposedChart,
   XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine,
+  Tooltip, ResponsiveContainer,
 } from 'recharts'
 import {
-  Calendar, ArrowUpRight, ArrowDownRight, Minus,
-  BarChart3, TrendingUp, Circle, ChevronLeft, ChevronRight,
+  Calendar, TrendingUp, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import {
   useGrossTrendData,
   useMultiStoreGrossTrendData,
   useHourlyGrossTrendData,
   useMultiStoreHourlyGrossTrendData,
-  type RawDailyStat,
-  type RawDailyStoreStat,
-  type RawHourlyStat,
-  type RawHourlyStoreStat,
 } from '../../hooks/useGrossTrendData'
 import { useStores } from '@/app/stores/hooks/useStores'
 import { useDashboardStore } from '../../../stores/dashboardStore'
-import { formatCurrency, formatCompactNumber } from '@/lib/utils/formatters'
+import { formatCompactNumber } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
-import { format, addDays, subDays, startOfWeek, endOfWeek, addWeeks, subWeeks, startOfYear, endOfYear, addYears, subYears } from 'date-fns'
+import { format, addDays, startOfWeek, endOfWeek, addWeeks, startOfYear, endOfYear } from 'date-fns'
 
-// ── Types ──────────────────────────────────────────
-type Granularity = 'day' | 'week' | 'month' | 'year'
-type ChartStyle = 'bar' | 'smooth-line' | 'line-dot' | 'bar-smooth' | 'bar-line-dot'
-
-interface TrendPoint {
-  label: string
-  grossSales: number
-  year: number
-  sortKey: string
-  isFuture?: boolean
-}
-
-// Multi-store data point: { label, sortKey, year, total, isFuture, [storeId]: grossSales, ... }
-interface MultiStoreTrendPoint {
-  label: string
-  sortKey: string
-  year: number
-  total: number
-  isFuture?: boolean
-  [key: string]: string | number | boolean | undefined
-}
-
-const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
-const GRAN_OPTIONS: { value: Granularity; label: string }[] = [
-  { value: 'day', label: 'Day' },
-  { value: 'week', label: 'Week' },
-  { value: 'month', label: 'Month' },
-  { value: 'year', label: 'Year' },
-]
-
-// Curated color palette for multi-store lines
-const STORE_COLORS = [
-  '#6366f1', // indigo
-  '#10b981', // emerald
-  '#f59e0b', // amber
-  '#ef4444', // red
-  '#8b5cf6', // violet
-  '#06b6d4', // cyan
-  '#f97316', // orange
-  '#ec4899', // pink
-]
-
-// ── Aggregation helpers (Fixed Windows) ────────────
-
-// DAY (24 hours)
-function aggregateHourly(raw: RawHourlyStat[]): TrendPoint[] {
-  const map = new Map(raw.map(r => [r.hour, r.grossSales]))
-  const points: TrendPoint[] = []
-  const currentHour = new Date().getHours() // Note: We don't mark hourly future points yet, usually 0 is fine
-
-  for (let h = 0; h < 24; h++) {
-    const ampm = h >= 12 ? 'PM' : 'AM'
-    const hr12 = h % 12 === 0 ? 12 : h % 12
-    points.push({
-      label: `${hr12}${ampm}`,
-      sortKey: String(h).padStart(2, '0'),
-      year: 0, // not used for day
-      grossSales: map.get(h) || 0,
-    })
-  }
-  return points
-}
-
-function aggregateMultiStoreHourly(raw: RawHourlyStoreStat[], storeIds: string[]): MultiStoreTrendPoint[] {
-  const map = new Map<number, Map<string, number>>()
-  for (const r of raw) {
-    if (!map.has(r.hour)) map.set(r.hour, new Map())
-    map.get(r.hour)!.set(r.storeId, r.grossSales)
-  }
-
-  const points: MultiStoreTrendPoint[] = []
-  for (let h = 0; h < 24; h++) {
-    const ampm = h >= 12 ? 'PM' : 'AM'
-    const hr12 = h % 12 === 0 ? 12 : h % 12
-    const pt: MultiStoreTrendPoint = {
-      label: `${hr12}${ampm}`,
-      sortKey: String(h).padStart(2, '0'),
-      year: 0,
-      total: 0,
-    }
-    const hrMap = map.get(h)
-    for (const sid of storeIds) {
-      const val = hrMap?.get(sid) || 0
-      pt[sid] = val
-      pt.total += val
-    }
-    points.push(pt)
-  }
-  return points
-}
-
-// WEEK (Sun-Sat)
-function aggregateWeekly(raw: RawDailyStat[], startD: Date): TrendPoint[] {
-  const map = new Map(raw.map(r => [r.date, r.grossSales]))
-  const points: TrendPoint[] = []
-  const todayStr = format(new Date(), 'yyyy-MM-dd')
-
-  for (let i = 0; i < 7; i++) {
-    const d = addDays(startD, i)
-    const dStr = format(d, 'yyyy-MM-dd')
-    points.push({
-      label: DAYS_OF_WEEK[i],
-      sortKey: dStr,
-      year: d.getFullYear(),
-      grossSales: map.get(dStr) || 0,
-      isFuture: dStr > todayStr,
-    })
-  }
-  return points
-}
-
-function aggregateMultiStoreWeekly(raw: RawDailyStoreStat[], startD: Date, storeIds: string[]): MultiStoreTrendPoint[] {
-  const map = new Map<string, Map<string, number>>()
-  for (const r of raw) {
-    if (!map.has(r.date)) map.set(r.date, new Map())
-    map.get(r.date)!.set(r.storeId, r.grossSales)
-  }
-  
-  const points: MultiStoreTrendPoint[] = []
-  const todayStr = format(new Date(), 'yyyy-MM-dd')
-
-  for (let i = 0; i < 7; i++) {
-    const d = addDays(startD, i)
-    const dStr = format(d, 'yyyy-MM-dd')
-    const pt: MultiStoreTrendPoint = {
-      label: DAYS_OF_WEEK[i],
-      sortKey: dStr,
-      year: d.getFullYear(),
-      total: 0,
-      isFuture: dStr > todayStr,
-    }
-    const dayMap = map.get(dStr)
-    for (const sid of storeIds) {
-      const val = dayMap?.get(sid) || 0
-      pt[sid] = val
-      pt.total += val
-    }
-    points.push(pt)
-  }
-  return points
-}
-
-// MONTH (Jan-Dec)
-function aggregateMonthly(raw: RawDailyStat[], targetYear: number): TrendPoint[] {
-  const map = new Map<number, number>()
-  for (const r of raw) {
-    const monthIdx = new Date(r.date + 'T00:00:00').getMonth()
-    map.set(monthIdx, (map.get(monthIdx) || 0) + r.grossSales)
-  }
-
-  const points: TrendPoint[] = []
-  const now = new Date()
-  const isCurrentYear = targetYear === now.getFullYear()
-  const currentMonthIdx = now.getMonth()
-
-  for (let i = 0; i < 12; i++) {
-    points.push({
-      label: SHORT_MONTHS[i],
-      sortKey: String(i).padStart(2, '0'),
-      year: targetYear,
-      grossSales: map.get(i) || 0,
-      isFuture: isCurrentYear && i > currentMonthIdx,
-    })
-  }
-  return points
-}
-
-function aggregateMultiStoreMonthly(raw: RawDailyStoreStat[], targetYear: number, storeIds: string[]): MultiStoreTrendPoint[] {
-  const map = new Map<number, Map<string, number>>()
-  for (const r of raw) {
-    const monthIdx = new Date(r.date + 'T00:00:00').getMonth()
-    if (!map.has(monthIdx)) map.set(monthIdx, new Map())
-    const mMap = map.get(monthIdx)!
-    mMap.set(r.storeId, (mMap.get(r.storeId) || 0) + r.grossSales)
-  }
-
-  const points: MultiStoreTrendPoint[] = []
-  const now = new Date()
-  const isCurrentYear = targetYear === now.getFullYear()
-  const currentMonthIdx = now.getMonth()
-
-  for (let i = 0; i < 12; i++) {
-    const pt: MultiStoreTrendPoint = {
-      label: SHORT_MONTHS[i],
-      sortKey: String(i).padStart(2, '0'),
-      year: targetYear,
-      total: 0,
-      isFuture: isCurrentYear && i > currentMonthIdx,
-    }
-    const mMap = map.get(i)
-    for (const sid of storeIds) {
-      const val = mMap?.get(sid) || 0
-      pt[sid] = val
-      pt.total += val
-    }
-    points.push(pt)
-  }
-  return points
-}
-
-// YEAR (7 years ending at targetYear)
-function aggregateYearly(raw: RawDailyStat[], targetYear: number): TrendPoint[] {
-  const map = new Map<number, number>()
-  for (const r of raw) {
-    const yr = new Date(r.date + 'T00:00:00').getFullYear()
-    map.set(yr, (map.get(yr) || 0) + r.grossSales)
-  }
-
-  const points: TrendPoint[] = []
-  for (let i = 6; i >= 0; i--) {
-    const yr = targetYear - i
-    points.push({
-      label: String(yr),
-      sortKey: String(yr),
-      year: yr,
-      grossSales: map.get(yr) || 0,
-    })
-  }
-  return points
-}
-
-function aggregateMultiStoreYearly(raw: RawDailyStoreStat[], targetYear: number, storeIds: string[]): MultiStoreTrendPoint[] {
-  const map = new Map<number, Map<string, number>>()
-  for (const r of raw) {
-    const yr = new Date(r.date + 'T00:00:00').getFullYear()
-    if (!map.has(yr)) map.set(yr, new Map())
-    const yMap = map.get(yr)!
-    yMap.set(r.storeId, (yMap.get(r.storeId) || 0) + r.grossSales)
-  }
-
-  const points: MultiStoreTrendPoint[] = []
-  for (let i = 6; i >= 0; i--) {
-    const yr = targetYear - i
-    const pt: MultiStoreTrendPoint = {
-      label: String(yr),
-      sortKey: String(yr),
-      year: yr,
-      total: 0,
-    }
-    const yMap = map.get(yr)
-    for (const sid of storeIds) {
-      const val = yMap?.get(sid) || 0
-      pt[sid] = val
-      pt.total += val
-    }
-    points.push(pt)
-  }
-  return points
-}
-
-// ── SVG Icons ──────────────────────────────────────
-function BarIcon({ active }: { active?: boolean }) {
-  return (
-    <svg viewBox="0 0 20 16" className="h-4 w-4" fill="none">
-      <rect x="2" y="6" width="4" height="10" rx="1" fill={active ? 'currentColor' : 'currentColor'} opacity={active ? 1 : 0.4} />
-      <rect x="8" y="2" width="4" height="14" rx="1" fill={active ? 'currentColor' : 'currentColor'} opacity={active ? 1 : 0.4} />
-      <rect x="14" y="8" width="4" height="8" rx="1" fill={active ? 'currentColor' : 'currentColor'} opacity={active ? 1 : 0.4} />
-    </svg>
-  )
-}
-
-function SmoothLineIcon({ active }: { active?: boolean }) {
-  return (
-    <svg viewBox="0 0 20 16" className="h-4 w-4" fill="none">
-      <path d="M2 12 C5 12, 6 4, 10 4 C14 4, 15 10, 18 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity={active ? 1 : 0.4} />
-    </svg>
-  )
-}
-
-function LineDotIcon({ active }: { active?: boolean }) {
-  return (
-    <svg viewBox="0 0 20 16" className="h-4 w-4" fill="none">
-      <path d="M2 12 L7 5 L13 8 L18 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity={active ? 1 : 0.4} />
-      <circle cx="2" cy="12" r="1.5" fill="currentColor" opacity={active ? 1 : 0.4} />
-      <circle cx="7" cy="5" r="1.5" fill="currentColor" opacity={active ? 1 : 0.4} />
-      <circle cx="13" cy="8" r="1.5" fill="currentColor" opacity={active ? 1 : 0.4} />
-      <circle cx="18" cy="3" r="1.5" fill="currentColor" opacity={active ? 1 : 0.4} />
-    </svg>
-  )
-}
-
-function BarSmoothIcon({ active }: { active?: boolean }) {
-  return (
-    <svg viewBox="0 0 20 16" className="h-4 w-4" fill="none">
-      <rect x="2" y="8" width="3" height="8" rx="0.5" fill="currentColor" opacity={active ? 0.3 : 0.15} />
-      <rect x="8.5" y="5" width="3" height="11" rx="0.5" fill="currentColor" opacity={active ? 0.3 : 0.15} />
-      <rect x="15" y="10" width="3" height="6" rx="0.5" fill="currentColor" opacity={active ? 0.3 : 0.15} />
-      <path d="M3.5 7 C6 7, 7 3, 10 3 C13 3, 14 9, 16.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity={active ? 1 : 0.4} />
-    </svg>
-  )
-}
-
-function BarLineDotIcon({ active }: { active?: boolean }) {
-  return (
-    <svg viewBox="0 0 20 16" className="h-4 w-4" fill="none">
-      <rect x="2" y="8" width="3" height="8" rx="0.5" fill="currentColor" opacity={active ? 0.3 : 0.15} />
-      <rect x="8.5" y="5" width="3" height="11" rx="0.5" fill="currentColor" opacity={active ? 0.3 : 0.15} />
-      <rect x="15" y="10" width="3" height="6" rx="0.5" fill="currentColor" opacity={active ? 0.3 : 0.15} />
-      <path d="M3.5 7 L10 3 L16.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity={active ? 1 : 0.4} />
-      <circle cx="3.5" cy="7" r="1.5" fill="currentColor" opacity={active ? 1 : 0.4} />
-      <circle cx="10" cy="3" r="1.5" fill="currentColor" opacity={active ? 1 : 0.4} />
-      <circle cx="16.5" cy="9" r="1.5" fill="currentColor" opacity={active ? 1 : 0.4} />
-    </svg>
-  )
-}
-
-const CHART_STYLE_OPTIONS: { value: ChartStyle; label: string; Icon: React.FC<{ active?: boolean }> }[] = [
-  { value: 'bar', label: 'Bar', Icon: BarIcon },
-  { value: 'smooth-line', label: 'Smooth Line', Icon: SmoothLineIcon },
-  { value: 'line-dot', label: 'Line Dot', Icon: LineDotIcon },
-  { value: 'bar-smooth', label: 'Bar + Smooth', Icon: BarSmoothIcon },
-  { value: 'bar-line-dot', label: 'Bar + Line Dot', Icon: BarLineDotIcon },
-]
-
-// ── Custom Tooltips ────────────────────────────────
-function SingleStoreTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null
-  const d = payload[0]?.payload as TrendPoint | undefined
-  if (!d) return null
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-xl backdrop-blur-sm min-w-[180px]">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-        {label}
-      </p>
-      {d.isFuture ? (
-        <p className="text-sm font-medium text-muted-foreground italic">No data yet</p>
-      ) : (
-        <div className="flex items-center justify-between gap-6">
-          <div className="flex items-center gap-2">
-            <div className="h-2.5 w-2.5 rounded-full bg-primary" />
-            <span className="text-sm text-foreground">Gross Sales</span>
-          </div>
-          <span className="text-sm font-bold text-foreground">{formatCurrency(d.grossSales)}</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function MultiStoreTooltip({
-  active, payload, label, storeMap,
-}: any & { storeMap: Map<string, { name: string; color: string }> }) {
-  if (!active || !payload?.length) return null
-  const point = payload[0]?.payload as MultiStoreTrendPoint | undefined
-  if (!point) return null
-
-  if (point.isFuture) {
-    return (
-      <div className="rounded-xl border border-border bg-card p-4 shadow-xl backdrop-blur-sm min-w-[180px]">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{label}</p>
-        <p className="text-sm font-medium text-muted-foreground italic">No data yet</p>
-      </div>
-    )
-  }
-
-  const entries = payload
-    .filter((p: any) => p.dataKey !== 'total')
-    .map((p: any) => ({
-      storeId: p.dataKey,
-      value: p.value || 0,
-      color: p.color || p.stroke || 'var(--muted-foreground)',
-      name: storeMap?.get(p.dataKey)?.name || p.dataKey,
-    }))
-    .sort((a: any, b: any) => b.value - a.value)
-
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-xl backdrop-blur-sm min-w-[220px] max-w-[320px]">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-        {label}
-      </p>
-      <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-        {entries.map((e: any) => (
-          <div key={e.storeId} className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: e.color }} />
-              <span className="text-sm text-foreground truncate">{e.name}</span>
-            </div>
-            <span className="text-sm font-bold text-foreground whitespace-nowrap">{formatCurrency(e.value)}</span>
-          </div>
-        ))}
-      </div>
-      {entries.length > 1 && (
-        <div className="border-t border-border/50 mt-2 pt-2 flex items-center justify-between">
-          <span className="text-xs font-semibold text-muted-foreground">Total</span>
-          <span className="text-sm font-bold text-foreground">{formatCurrency(point.total)}</span>
-        </div>
-      )}
-    </div>
-  )
-}
+// ── Imported Submodules ──────────────────────────
+import { Granularity, ChartStyle, TrendPoint, MultiStoreTrendPoint } from './types'
+import { GRAN_OPTIONS, STORE_COLORS } from './constants'
+import { CHART_STYLE_OPTIONS } from './ChartIcons'
+import { SingleStoreTooltip, MultiStoreTooltip } from './ChartTooltips'
+import {
+  aggregateHourly,
+  aggregateMultiStoreHourly,
+  aggregateWeekly,
+  aggregateMultiStoreWeekly,
+  aggregateMonthly,
+  aggregateMultiStoreMonthly,
+  aggregateYearly,
+  aggregateMultiStoreYearly,
+} from './utils'
 
 // ── Main Component ─────────────────────────────────
 export function MonthlyGrossTrend() {
@@ -518,41 +136,31 @@ export function MonthlyGrossTrend() {
       : dailyRaw ? aggregateMonthly(dailyRaw, tgtYr) : []
   } else if (granularity === 'year') {
     isLoading = isAllStores ? multiDailyLoading : dailyLoading
-    const endYr = startObj.getFullYear() + 6 // endYr was offset + now.getFullYear() -> offset = startYr + 6 -> startObj is startYr
+    const endYr = startObj.getFullYear() + 6
     allData = isAllStores && multiDailyRaw
       ? aggregateMultiStoreYearly(multiDailyRaw, endYr, storeIds)
       : dailyRaw ? aggregateYearly(dailyRaw, endYr) : []
   }
 
-  // Summary (single-store mode or total in multi-store mode, disregarding future days)
+  // Summary
   const summary = useMemo(() => {
     if (allData.length === 0) return null
 
     const getGross = (d: any) => isAllStores ? (d as MultiStoreTrendPoint).total : (d as TrendPoint).grossSales
     const isFuture = (d: any) => d.isFuture === true
 
-    const withSales = allData.filter(d => !isFuture(d) && getGross(d) > 0)
-    const validDataPoints = allData.filter(d => !isFuture(d)) // Include days with 0 sales for average
+    const withSales = allData.filter(d => !isFuture(d) && (getGross(d) || 0) > 0)
+    const validDataPoints = allData.filter(d => !isFuture(d))
 
-    const totalGross = withSales.reduce((s, d) => s + getGross(d), 0)
-    const best = withSales.reduce((b, d) => getGross(d) > getGross(b) ? d : b, withSales[0] || { label: 'N/A' })
+    const totalGross = withSales.reduce((s, d) => s + (getGross(d) || 0), 0)
+    const best = withSales.reduce((b, d) => (getGross(d) || 0) > (getGross(b) || 0) ? d : b, withSales[0] || { label: 'N/A' })
     const avg = validDataPoints.length > 0 ? totalGross / validDataPoints.length : 0
-
-    const vWithSales = allData.filter(d => getGross(d) > 0) // Look back even across future gap if needed, but safer to use valid
-    let mom = 0
-    if (vWithSales.length >= 2) {
-      const cur = getGross(vWithSales[vWithSales.length - 1])
-      const prev = getGross(vWithSales[vWithSales.length - 2])
-      if (prev > 0) mom = Math.round(((cur - prev) / prev) * 1000) / 10
-    }
 
     return {
       ytdGross: totalGross,
       avg,
       bestLabel: (best as any)?.label || 'N/A',
       bestValue: getGross(best) || 0,
-      mom,
-      hasMom: vWithSales.length >= 2,
     }
   }, [allData, isAllStores])
 
@@ -564,7 +172,7 @@ export function MonthlyGrossTrend() {
     tickLine: false,
     tick: { fontSize: 11, fill: 'var(--muted-foreground)' },
     dy: 8,
-    interval: granularity === 'day' ? 3 : 0, // Show every 4th hour label on day view to avoid crowding
+    interval: granularity === 'day' ? 3 : 0,
     angle: 0,
     textAnchor: 'middle' as 'middle',
     height: 30,
@@ -580,7 +188,6 @@ export function MonthlyGrossTrend() {
   function renderSingleStoreChart() {
     const data = allData as TrendPoint[]
     
-    // Future points mapping: set grossSales to null so they don't plot, but preserve the point on X axis
     const chartData = data.map(d => ({
       ...d,
       chartGross: d.isFuture ? null : d.grossSales
@@ -684,7 +291,6 @@ export function MonthlyGrossTrend() {
 
     const chartData = data.map(d => {
       if (d.isFuture) {
-        // Null out all values
         const empty: any = { label: d.label, isFuture: true, total: null }
         storeIds.forEach(sid => empty[sid] = null)
         return empty
