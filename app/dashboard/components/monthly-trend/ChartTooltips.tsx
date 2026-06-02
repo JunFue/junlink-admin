@@ -77,3 +77,33 @@ export function MultiStoreTooltip({
     </div>
   )
 }
+
+export function OverallGrossTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+  const point = payload[0]?.payload
+  if (!point) return null
+
+  if (point.isFuture) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-4 shadow-xl backdrop-blur-sm min-w-[180px]">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{label}</p>
+        <p className="text-sm font-medium text-muted-foreground italic">No data yet</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-xl backdrop-blur-sm min-w-[200px]">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+        {label}
+      </p>
+      <div className="flex items-center justify-between gap-6">
+        <div className="flex items-center gap-2">
+          <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#4a90d9' }} />
+          <span className="text-sm text-foreground">Overall Gross</span>
+        </div>
+        <span className="text-sm font-bold text-foreground">{formatCurrency(point.total || 0)}</span>
+      </div>
+    </div>
+  )
+}

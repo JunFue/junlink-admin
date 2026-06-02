@@ -4,10 +4,11 @@ import { useMemo, useState, useEffect } from 'react'
 import {
   LineChart, Line, BarChart, Bar, ComposedChart,
   XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
+  Tooltip, ResponsiveContainer, LabelList,
 } from 'recharts'
 import {
   Calendar, TrendingUp, ChevronLeft, ChevronRight,
+  Tag, BarChart3,
 } from 'lucide-react'
 import {
   useGrossTrendData,
@@ -17,7 +18,7 @@ import {
 } from '../../hooks/useGrossTrendData'
 import { useStores } from '@/app/stores/hooks/useStores'
 import { useDashboardStore } from '../../../stores/dashboardStore'
-import { formatCompactNumber } from '@/lib/utils/formatters'
+import { formatCompactNumber, formatCurrency } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
 import { format, addDays, startOfWeek, endOfWeek, addWeeks, startOfYear, endOfYear } from 'date-fns'
 
@@ -25,7 +26,7 @@ import { format, addDays, startOfWeek, endOfWeek, addWeeks, startOfYear, endOfYe
 import { Granularity, ChartStyle, TrendPoint, MultiStoreTrendPoint } from './types'
 import { GRAN_OPTIONS, STORE_COLORS } from './constants'
 import { CHART_STYLE_OPTIONS } from './ChartIcons'
-import { SingleStoreTooltip, MultiStoreTooltip } from './ChartTooltips'
+import { SingleStoreTooltip, MultiStoreTooltip, OverallGrossTooltip } from './ChartTooltips'
 import {
   aggregateHourly,
   aggregateMultiStoreHourly,
@@ -37,6 +38,16 @@ import {
   aggregateMultiStoreYearly,
 } from './utils'
 
+// ── View modes for multi-store ──────────────────
+type ViewMode = 'detailed' | 'overall'
+
+// ── Constants for label collision avoidance ──────
+const CHART_HEIGHT_PX = 280
+const LABEL_HEIGHT_PX = 16   // approximate rendered label height
+const LABEL_ABOVE = -14      // default y-offset: above the point
+const LABEL_BELOW = 18       // below the point
+const LABEL_STEP = 16        // additional offset per stacked collision
+
 // ── Main Component ─────────────────────────────────
 export function MonthlyGrossTrend() {
   const { selectedBranch } = useDashboardStore()
@@ -47,6 +58,8 @@ export function MonthlyGrossTrend() {
   const [granularity, setGranularity] = useState<Granularity>('month')
   const [chartStyle, setChartStyle] = useState<ChartStyle>('smooth-line')
   const [offset, setOffset] = useState(0) // 0 = current period, -1 = previous, etc.
+  const [showLabels, setShowLabels] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>('detailed')
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -164,8 +177,200 @@ export function MonthlyGrossTrend() {
     }
   }, [allData, isAllStores])
 
+  // ── Smart label positions (collision avoidance) ────────────
+  const labelPositions = useMemo(() => {
+    const positions = new Map<string, number>() // key: "index-dataKey" → dy offset
+    if (!showLabels || allData.length === 0) return positions
+
+    // 1) Determine Y-range to compute a collision threshold in data-space
+    let yMax = -Infinity
+    if (isAllStores && viewMode === 'detailed') {
+      const data = allData as MultiStoreTrendPoint[]
+      for (const d of data) {
+        if (d.isFuture) continue
+        for (const sid of storeIds) {
+          const v = d[sid]
+          if (typeof v === 'number' && v > yMax) yMax = v
+        }
+      }
+    } else if (isAllStores && viewMode === 'overall') {
+      for (const d of allData as MultiStoreTrendPoint[]) {
+        if (!d.isFuture && typeof d.total === 'number' && d.total > yMax) yMax = d.total
+      }
+    } else {
+      for (const d of allData as TrendPoint[]) {
+        if (!d.isFuture && d.grossSales > yMax) yMax = d.grossSales
+      }
+    }
+
+    if (yMax <= 0) return positions
+
+    // Collision threshold: data-value difference that maps to LABEL_HEIGHT_PX in pixels
+    const collisionThreshold = (yMax / CHART_HEIGHT_PX) * LABEL_HEIGHT_PX
+
+    // 2) Multi-store detailed: resolve per-column (each x-index has N store values)
+    if (isAllStores && viewMode === 'detailed') {
+      const data = allData as MultiStoreTrendPoint[]
+      for (let i = 0; i < data.length; i++) {
+        const d = data[i]
+        if (d.isFuture) continue
+
+        // Gather values at this x-index
+        const entries: { key: string; value: number }[] = []
+        for (const sid of storeIds) {
+          const v = d[sid]
+          if (typeof v === 'number' && v > 0) entries.push({ key: sid, value: v })
+        }
+        // Sort descending (highest value = topmost y on chart)
+        entries.sort((a, b) => b.value - a.value)
+
+        // Greedy placement: track placed positions (in data-space) with their dy
+        const placed: { value: number; dy: number }[] = []
+
+        for (const entry of entries) {
+          let dy = LABEL_ABOVE
+          let bestDy = dy
+          let hasCollision = true
+          let attempts = 0
+          const maxAttempts = entries.length + 2
+
+          while (hasCollision && attempts < maxAttempts) {
+            hasCollision = false
+            for (const p of placed) {
+              // Absolute physical vertical distance between label Y centers
+              const effectivePxDist = Math.abs(
+                ((p.value - entry.value) / yMax) * CHART_HEIGHT_PX + (bestDy - p.dy)
+              )
+              if (effectivePxDist < LABEL_HEIGHT_PX) {
+                hasCollision = true
+                break
+              }
+            }
+            if (hasCollision) {
+              // Alternate above/below with increasing offset
+              attempts++
+              let tryBelow = attempts % 2 === 1
+              let offsetFactor = Math.floor(attempts / 2)
+
+              if (tryBelow) {
+                const tryDy = LABEL_BELOW + offsetFactor * LABEL_STEP
+                const pxFromBottom = (entry.value / yMax) * CHART_HEIGHT_PX
+                if (pxFromBottom < tryDy + LABEL_HEIGHT_PX) {
+                  // Not enough room below, skip to the next "above" step
+                  attempts++
+                  tryBelow = false
+                  offsetFactor = Math.floor(attempts / 2)
+                }
+              }
+
+              if (tryBelow) {
+                bestDy = LABEL_BELOW + offsetFactor * LABEL_STEP
+              } else {
+                bestDy = LABEL_ABOVE - offsetFactor * LABEL_STEP
+              }
+            }
+          }
+
+          placed.push({ value: entry.value, dy: bestDy })
+          positions.set(`${i}-${entry.key}`, bestDy)
+        }
+      }
+    }
+    // 3) Single-store: alternate when consecutive points are too close
+    else if (!isAllStores) {
+      const data = allData as TrendPoint[]
+      let prevDy = LABEL_ABOVE
+      for (let i = 0; i < data.length; i++) {
+        const d = data[i]
+        if (d.isFuture || !d.grossSales) continue
+
+        let dy = LABEL_ABOVE
+        const prevVal = i > 0 && !data[i - 1].isFuture ? data[i - 1].grossSales : null
+        const nextVal = i < data.length - 1 && !data[i + 1].isFuture ? data[i + 1].grossSales : null
+
+        const closeToNeighbor =
+          (prevVal != null && Math.abs(d.grossSales - prevVal) < collisionThreshold) ||
+          (nextVal != null && Math.abs(d.grossSales - nextVal) < collisionThreshold)
+
+        const pxFromBottom = (d.grossSales / yMax) * CHART_HEIGHT_PX
+
+        if (closeToNeighbor && prevDy === LABEL_ABOVE && pxFromBottom >= LABEL_BELOW + LABEL_HEIGHT_PX) {
+          dy = LABEL_BELOW
+        }
+
+        prevDy = dy
+        positions.set(`${i}-chartGross`, dy)
+      }
+    }
+    // 4) Overall chart: single series, alternate if consecutive are close
+    else {
+      const data = allData as MultiStoreTrendPoint[]
+      let prevDy = LABEL_ABOVE
+      for (let i = 0; i < data.length; i++) {
+        const d = data[i]
+        if (d.isFuture || !d.total) continue
+        const val = d.total as number
+        const prevVal = i > 0 && !data[i - 1].isFuture ? (data[i - 1].total as number) : null
+        const nextVal = i < data.length - 1 && !data[i + 1].isFuture ? (data[i + 1].total as number) : null
+
+        let dy = LABEL_ABOVE
+        const closeToNeighbor =
+          (prevVal != null && Math.abs(val - prevVal) < collisionThreshold) ||
+          (nextVal != null && Math.abs(val - nextVal) < collisionThreshold)
+
+        const pxFromBottom = (val / yMax) * CHART_HEIGHT_PX
+
+        if (closeToNeighbor && prevDy === LABEL_ABOVE && pxFromBottom >= LABEL_BELOW + LABEL_HEIGHT_PX) dy = LABEL_BELOW
+        prevDy = dy
+        positions.set(`${i}-total`, dy)
+      }
+    }
+
+    return positions
+  }, [allData, showLabels, isAllStores, viewMode, storeIds, storeMap])
+
+  // ── Smart label renderers ─────────────────────────────────
+  const makeSmartLabel = (dataKey: string, color: string) => (props: any) => {
+    const { x, y, value, index } = props
+    if (value == null || value === 0) return null
+    const dy = labelPositions.get(`${index}-${dataKey}`) ?? LABEL_ABOVE
+    const labelText = formatCurrency(value)
+
+    // Estimate width based on character count (approx 5.2px per char at size 9)
+    const width = labelText.length * 5.2
+    const height = 12
+
+    return (
+      <g className="pointer-events-none">
+        <rect
+          x={x - width / 2 - 4}
+          y={y + dy - height + 3}
+          width={width + 8}
+          height={height}
+          rx={3}
+          fill="var(--card)"
+          fillOpacity={0.75}
+        />
+        <text
+          x={x}
+          y={y + dy}
+          textAnchor="middle"
+          fontSize={9}
+          fontWeight={700}
+          fill={color}
+        >
+          {labelText}
+        </text>
+      </g>
+    )
+  }
+
+  // Pre-build the single-store label renderer
+  const singleStoreLabel = makeSmartLabel('chartGross', 'var(--foreground)')
+  const overallLabel = makeSmartLabel('total', 'var(--foreground)')
+
   // ── Chart rendering ──────────────────────────────
-  const chartMargin = { top: 10, right: 16, left: 0, bottom: 0 }
+  const chartMargin = { top: showLabels ? 28 : 10, right: 16, left: 0, bottom: 0 }
   const xAxisProps = {
     dataKey: 'label',
     axisLine: false,
@@ -201,7 +406,9 @@ export function MonthlyGrossTrend() {
             <XAxis {...xAxisProps} />
             <YAxis {...yAxisProps} />
             <Tooltip content={<SingleStoreTooltip />} cursor={{ fill: 'var(--muted)', opacity: 0.2 }} />
-            <Bar dataKey="chartGross" fill="var(--primary)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+            <Bar dataKey="chartGross" fill="var(--primary)" radius={[4, 4, 0, 0]} maxBarSize={40}>
+              {showLabels && <LabelList dataKey="chartGross" content={singleStoreLabel} />}
+            </Bar>
           </BarChart>
         )
 
@@ -217,10 +424,12 @@ export function MonthlyGrossTrend() {
               dataKey="chartGross"
               stroke="var(--primary)"
               strokeWidth={2.5}
-              dot={false}
+              dot={showLabels ? { r: 3, fill: 'var(--primary)', strokeWidth: 0 } : false}
               connectNulls={false}
               activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--primary)', fill: 'var(--card)' }}
-            />
+            >
+              {showLabels && <LabelList dataKey="chartGross" content={singleStoreLabel} />}
+            </Line>
           </LineChart>
         )
 
@@ -239,7 +448,9 @@ export function MonthlyGrossTrend() {
               connectNulls={false}
               dot={{ r: 3, fill: 'var(--primary)', strokeWidth: 0 }}
               activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--primary)', fill: 'var(--card)' }}
-            />
+            >
+              {showLabels && <LabelList dataKey="chartGross" content={singleStoreLabel} />}
+            </Line>
           </LineChart>
         )
 
@@ -256,10 +467,12 @@ export function MonthlyGrossTrend() {
               dataKey="chartGross"
               stroke="var(--primary)"
               strokeWidth={2.5}
-              dot={false}
+              dot={showLabels ? { r: 3, fill: 'var(--primary)', strokeWidth: 0 } : false}
               connectNulls={false}
               activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--primary)', fill: 'var(--card)' }}
-            />
+            >
+              {showLabels && <LabelList dataKey="chartGross" content={singleStoreLabel} />}
+            </Line>
           </ComposedChart>
         )
 
@@ -279,7 +492,9 @@ export function MonthlyGrossTrend() {
               connectNulls={false}
               dot={{ r: 3, fill: 'var(--primary)', strokeWidth: 0 }}
               activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--primary)', fill: 'var(--card)' }}
-            />
+            >
+              {showLabels && <LabelList dataKey="chartGross" content={singleStoreLabel} />}
+            </Line>
           </ComposedChart>
         )
     }
@@ -298,6 +513,13 @@ export function MonthlyGrossTrend() {
       return d
     })
 
+    // Build per-store smart label renderers
+    const storeLabelRenderers = new Map<string, (props: any) => any>()
+    for (const sid of storeIds) {
+      const info = storeMap.get(sid)
+      if (info) storeLabelRenderers.set(sid, makeSmartLabel(sid, info.color))
+    }
+
     const renderStoreLines = (withDots: boolean, lineType: 'monotone' | 'linear' = 'monotone') =>
       storeIds.map(sid => {
         const info = storeMap.get(sid)
@@ -310,10 +532,12 @@ export function MonthlyGrossTrend() {
             stroke={info.color}
             strokeWidth={2}
             connectNulls={false}
-            dot={withDots ? { r: 2.5, fill: info.color, strokeWidth: 0 } : false}
+            dot={withDots || showLabels ? { r: 2.5, fill: info.color, strokeWidth: 0 } : false}
             activeDot={{ r: 4, strokeWidth: 2, stroke: info.color, fill: 'var(--card)' }}
             name={info.name}
-          />
+          >
+            {showLabels && <LabelList dataKey={sid} content={storeLabelRenderers.get(sid)} />}
+          </Line>
         )
       })
 
@@ -333,7 +557,9 @@ export function MonthlyGrossTrend() {
               const info = storeMap.get(sid)
               if (!info) return null
               return (
-                <Bar key={sid} dataKey={sid} fill={info.color} radius={[2, 2, 0, 0]} maxBarSize={24} name={info.name} />
+                <Bar key={sid} dataKey={sid} fill={info.color} radius={[2, 2, 0, 0]} maxBarSize={24} name={info.name}>
+                  {showLabels && <LabelList dataKey={sid} content={storeLabelRenderers.get(sid)} />}
+                </Bar>
               )
             })}
           </BarChart>
@@ -385,6 +611,45 @@ export function MonthlyGrossTrend() {
           </ComposedChart>
         )
     }
+  }
+
+  // ── Overall Gross Chart (sum across all stores) ──────────
+  function renderOverallGrossChart() {
+    const data = allData as MultiStoreTrendPoint[]
+    const chartData = data.map(d => ({
+      label: d.label,
+      total: d.isFuture ? null : (d.total ?? 0),
+      isFuture: d.isFuture,
+    }))
+
+    const overallMargin = { top: showLabels ? 28 : 10, right: 16, left: 0, bottom: 0 }
+
+    return (
+      <ComposedChart data={chartData} margin={overallMargin}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
+        <XAxis
+          {...xAxisProps}
+          angle={-45}
+          textAnchor="end"
+          height={50}
+        />
+        <YAxis {...yAxisProps} label={{ value: 'Total', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: 'var(--muted-foreground)' } }} />
+        <Tooltip content={<OverallGrossTooltip />} cursor={{ fill: 'var(--muted)', opacity: 0.2 }} />
+        <Bar dataKey="total" fill="#4a90d9" radius={[4, 4, 0, 0]} maxBarSize={48}>
+          {showLabels && <LabelList dataKey="total" content={overallLabel} />}
+        </Bar>
+        <Line
+          type="monotone"
+          dataKey="total"
+          stroke="#4a90d9"
+          strokeWidth={2}
+          strokeDasharray="6 3"
+          dot={false}
+          connectNulls={false}
+          activeDot={{ r: 4, strokeWidth: 2, stroke: '#4a90d9', fill: 'var(--card)' }}
+        />
+      </ComposedChart>
+    )
   }
 
   // ── Loading / empty states ───────────────────────
@@ -441,24 +706,73 @@ export function MonthlyGrossTrend() {
               </button>
             </div>
 
-            {/* Chart Style Picker */}
-            <div className="flex bg-muted rounded-lg p-0.5 border border-border/50">
-              {CHART_STYLE_OPTIONS.map(o => (
+            {/* View Mode Toggle (only when viewing all stores) */}
+            {isAllStores && (
+              <div className="flex bg-muted rounded-lg p-0.5 border border-border/50">
                 <button
-                  key={o.value}
-                  onClick={() => setChartStyle(o.value)}
-                  title={o.label}
+                  onClick={() => setViewMode('detailed')}
+                  title="Detailed (per-store)"
                   className={cn(
-                    'flex items-center justify-center gap-0.5 px-2 py-1 rounded-md transition-all',
-                    chartStyle === o.value
+                    'flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold transition-all',
+                    viewMode === 'detailed'
                       ? 'bg-background text-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
-                  <o.Icon active={chartStyle === o.value} />
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Detailed</span>
                 </button>
-              ))}
-            </div>
+                <button
+                  onClick={() => setViewMode('overall')}
+                  title="Overall gross (sum)"
+                  className={cn(
+                    'flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold transition-all',
+                    viewMode === 'overall'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <BarChart3 className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Overall</span>
+                </button>
+              </div>
+            )}
+
+            {/* Labels Toggle */}
+            <button
+              onClick={() => setShowLabels(v => !v)}
+              title={showLabels ? 'Hide labels' : 'Show labels'}
+              className={cn(
+                'flex items-center gap-1 px-2 py-1.5 rounded-lg border transition-all text-[11px] font-bold',
+                showLabels
+                  ? 'bg-primary/10 border-primary/30 text-primary'
+                  : 'bg-muted border-border/50 text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Tag className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Labels</span>
+            </button>
+
+            {/* Chart Style Picker (hide when overall mode) */}
+            {!(isAllStores && viewMode === 'overall') && (
+              <div className="flex bg-muted rounded-lg p-0.5 border border-border/50">
+                {CHART_STYLE_OPTIONS.map(o => (
+                  <button
+                    key={o.value}
+                    onClick={() => setChartStyle(o.value)}
+                    title={o.label}
+                    className={cn(
+                      'flex items-center justify-center gap-0.5 px-2 py-1 rounded-md transition-all',
+                      chartStyle === o.value
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <o.Icon active={chartStyle === o.value} />
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Granularity Tabs */}
             <div className="flex bg-muted rounded-lg p-0.5 border border-border/50">
@@ -496,7 +810,11 @@ export function MonthlyGrossTrend() {
         ) : (
           <div className="h-[280px] w-full mt-2">
             <ResponsiveContainer width="100%" height="100%">
-              {isAllStores ? renderMultiStoreChart() : renderSingleStoreChart()}
+              {isAllStores && viewMode === 'overall'
+                ? renderOverallGrossChart()
+                : isAllStores
+                  ? renderMultiStoreChart()
+                  : renderSingleStoreChart()}
             </ResponsiveContainer>
           </div>
         )}
@@ -506,7 +824,12 @@ export function MonthlyGrossTrend() {
       <div className="p-6 pt-2">
         {/* Legend */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-4 border-b border-border/50 pb-4">
-          {isAllStores ? (
+          {isAllStores && viewMode === 'overall' ? (
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-6 rounded-full" style={{ backgroundColor: '#4a90d9' }} />
+              <span className="text-[11px] text-muted-foreground font-medium">Overall Gross (All Stores)</span>
+            </div>
+          ) : isAllStores ? (
             storeIds.map(sid => {
               const info = storeMap.get(sid)
               if (!info) return null
