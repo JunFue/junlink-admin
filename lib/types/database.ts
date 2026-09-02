@@ -139,7 +139,9 @@ export interface ProductCategory {
 export interface Classification {
   id: string;
   name: string;
-  store_id: string;
+  store_id?: string | null;
+  admin_id?: string | null;
+  icon?: string | null;
   created_at: string | null;
 }
 

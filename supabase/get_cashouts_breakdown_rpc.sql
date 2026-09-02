@@ -16,7 +16,7 @@ BEGIN
   -- OPEX Breakdown
   SELECT 
     'OPEX'::text as cashout_type,
-    c.name as subcategory,
+    TRIM(c.name) as subcategory,
     SUM(e.amount) as total_amount
   FROM public.expenses e
   JOIN public.classification c ON e.classification_id = c.id
@@ -24,14 +24,14 @@ BEGIN
     AND e.transaction_date >= p_start_date
     AND e.transaction_date <= p_end_date
     AND e.cashout_type = 'OPEX'
-  GROUP BY c.name
+  GROUP BY TRIM(c.name)
   
   UNION ALL
   
   -- REMITTANCE Breakdown
   SELECT 
     'REMITTANCE'::text as cashout_type,
-    r.name as subcategory,
+    TRIM(r.name) as subcategory,
     SUM(e.amount) as total_amount
   FROM public.expenses e
   JOIN public.remittance_categories r ON e.remittance_category_id = r.id
@@ -39,7 +39,7 @@ BEGIN
     AND e.transaction_date >= p_start_date
     AND e.transaction_date <= p_end_date
     AND e.cashout_type = 'REMITTANCE'
-  GROUP BY r.name
+  GROUP BY TRIM(r.name)
   
   UNION ALL
   

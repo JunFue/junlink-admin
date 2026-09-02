@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { TrendingUp, TrendingDown, RefreshCcw, ChevronDown } from "lucide-react";
@@ -69,7 +69,7 @@ export function PerformanceCard({ bestSellersQuery, worstSellersQuery }: Perform
                   {item.item_name}
                 </span>
                 <span className="text-[10px] text-muted-foreground">
-                  Rev: â‚±{item.revenue.toLocaleString()}
+                  Rev: ₱{item.revenue.toLocaleString()}
                 </span>
               </div>
               <div className="flex flex-col items-end shrink-0">

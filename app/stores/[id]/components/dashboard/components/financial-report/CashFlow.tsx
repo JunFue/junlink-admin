@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -72,7 +72,7 @@ export function CashFlow({ storeId, startDate, endDate }: CashFlowProps) {
         header: "Forwarded",
         cell: (info) => (
           <div className="font-mono text-slate-400 text-right">
-            â‚±
+            ₱
             {(info.getValue() as number).toLocaleString(undefined, {
               minimumFractionDigits: 2,
             })}
@@ -87,7 +87,7 @@ export function CashFlow({ storeId, startDate, endDate }: CashFlowProps) {
           return (
             <div className="font-mono text-green-400 text-right">
               {val > 0
-                ? `+â‚±${val.toLocaleString(undefined, {
+                ? `+₱${val.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                   })}`
                 : "-"}
@@ -103,7 +103,7 @@ export function CashFlow({ storeId, startDate, endDate }: CashFlowProps) {
           return (
             <div className="font-mono text-red-400 text-right">
               {val > 0
-                ? `-â‚±${val.toLocaleString(undefined, {
+                ? `-₱${val.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                   })}`
                 : "-"}
@@ -116,7 +116,7 @@ export function CashFlow({ storeId, startDate, endDate }: CashFlowProps) {
         header: "Balance",
         cell: (info) => (
           <div className="bg-slate-800/50 py-1 rounded font-mono font-bold text-white text-right">
-            â‚±
+            ₱
             {(info.getValue() as number).toLocaleString(undefined, {
               minimumFractionDigits: 2,
             })}

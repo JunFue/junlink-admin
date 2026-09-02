@@ -26,6 +26,7 @@ export interface RawHourlyStoreStat {
 }
 
 // ── Daily stats (Single-store or aggregated "all") ───────────
+// Reads from daily_store_stats (pre-computed, kept in sync by DB trigger)
 async function fetchDailyStats(
   storeId: string | null,
   startDateStr: string,
@@ -66,6 +67,7 @@ async function fetchDailyStats(
 }
 
 // ── Daily stats (Per-store breakdown) ─────────────────────────
+// Reads from daily_store_stats (pre-computed, kept in sync by DB trigger)
 async function fetchPerStoreDailyStats(
   startDateStr: string,
   endDateStr: string

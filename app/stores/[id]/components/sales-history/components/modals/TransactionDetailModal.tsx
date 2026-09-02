@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useState } from "react";
 import { X, Printer, Loader2, Info, ReceiptText } from "lucide-react";
@@ -121,8 +121,8 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                             </div>
                           </td>
                           <td className="px-4 py-3 text-center">{item.quantity}</td>
-                          <td className="px-4 py-3 text-right">â‚±{item.sales_price.toFixed(2)}</td>
-                          <td className="px-4 py-3 text-right font-medium">â‚±{item.total_price.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-right">₱{item.sales_price.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-right font-medium">₱{item.total_price.toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -135,21 +135,21 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                 <div className="space-y-2 w-full max-w-xs">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Amount Rendered</span>
-                    <span>â‚±{data.amount_rendered.toFixed(2)}</span>
+                    <span>₱{data.amount_rendered.toFixed(2)}</span>
                   </div>
                   {data.voucher > 0 && (
                     <div className="flex justify-between text-sm text-primary font-medium">
                       <span>Voucher Applied</span>
-                      <span>- â‚±{data.voucher.toFixed(2)}</span>
+                      <span>- ₱{data.voucher.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="pt-2 border-t flex justify-between font-bold text-lg">
                     <span className="text-foreground">Grand Total</span>
-                    <span className="text-primary">â‚±{(data.amount_rendered + data.voucher - data.change).toFixed(2)}</span>
+                    <span className="text-primary">₱{(data.amount_rendered + data.voucher - data.change).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-green-500 font-bold">
                     <span>Change</span>
-                    <span>â‚±{data.change.toFixed(2)}</span>
+                    <span>₱{data.change.toFixed(2)}</span>
                   </div>
                 </div>
               </div>

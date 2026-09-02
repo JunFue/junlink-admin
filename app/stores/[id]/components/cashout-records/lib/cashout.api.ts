@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -271,7 +271,7 @@ export const fetchExpenses = async (
         receiptNo: row.receipt_no ?? "",
         notes: row.notes ?? "",
         
-        // Details â€” extract from metadata first, fallback to joined relations
+        // Details — extract from metadata first, fallback to joined relations
         expenseCategory: meta.expenseCategory || (row.classification_details?.name ?? (row.cashout_type === 'OPEX' ? "Unclassified" : undefined)),
         product: meta.product || (row.product_category?.category ?? (row.source || undefined)),
         manufacturer: meta.manufacturer || undefined,
@@ -342,7 +342,7 @@ export const fetchExpensesPaginated = async (
         receiptNo: row.receipt_no ?? "",
         notes: row.notes ?? "",
         
-        // Details â€” extract from metadata first, fallback to joined relations
+        // Details — extract from metadata first, fallback to joined relations
         expenseCategory: meta.expenseCategory || row.classification_details?.name,
         product: meta.product || (row.product_category?.category ?? (row.source || undefined)),
         manufacturer: meta.manufacturer || undefined,
@@ -443,37 +443,48 @@ export const createExpense = async (input: CashoutInput) => {
 // --- CLASSIFICATION API ---
 
 // 4. Fetch Classifications
-export const fetchClassifications = async (storeId: string): Promise<Classification[]> => {
+export const fetchClassifications = async (storeId?: string): Promise<Classification[]> => {
   const supabase = await getSupabase();
-  const { data, error } = await supabase
-    .from("classification")
-    .select("*")
-    .eq("store_id", storeId)
-    .order("name", { ascending: true });
+  const { data: { user } } = await supabase.auth.getUser();
+
+  let query = supabase.from("classification").select("*").order("name", { ascending: true });
+
+  if (user) {
+    if (storeId) {
+      query = query.or(`admin_id.eq.${user.id},store_id.eq.${storeId}`);
+    } else {
+      query = query.or(`admin_id.eq.${user.id},store_id.is.null`);
+    }
+  } else if (storeId) {
+    query = query.eq("store_id", storeId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error fetching classifications:", error);
     return [];
   }
 
-  // Auto-seed if empty for this store
-  if (!data || data.length === 0) {
-    await seedClassifications(storeId);
-    // Re-fetch after seeding
-    const { data: seededData } = await supabase
-      .from("classification")
-      .select("*")
-      .eq("store_id", storeId)
-      .order("name", { ascending: true });
-    return seededData || [];
-  }
+  // Deduplicate by lowercase trimmed name
+  const seen = new Set<string>();
+  const uniqueClassifications: Classification[] = [];
+  (data || []).forEach((c) => {
+    const key = (c.name || '').trim().toLowerCase();
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      uniqueClassifications.push(c);
+    }
+  });
 
-  return data || [];
+  return uniqueClassifications;
 };
 
 // 4b. Seed Default Classifications
-export const seedClassifications = async (storeId: string) => {
+export const seedClassifications = async (storeId?: string) => {
   const supabase = await getSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
 
   const defaults = [
     { name: 'Utilities', icon: 'Lightbulb' },
@@ -490,7 +501,8 @@ export const seedClassifications = async (storeId: string) => {
   const insertData = defaults.map(d => ({
     name: d.name,
     icon: d.icon,
-    store_id: storeId
+    admin_id: user.id,
+    store_id: storeId || null
   }));
 
   const { error } = await supabase.from("classification").insert(insertData);
@@ -500,11 +512,13 @@ export const seedClassifications = async (storeId: string) => {
 // 5. Create Classification
 export const createClassification = async (storeId: string, name: string, icon: string = 'Store') => {
   const supabase = await getSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
 
   const { error } = await supabase.from("classification").insert({
-    name,
+    name: name.trim(),
     icon,
-    store_id: storeId
+    admin_id: user?.id,
+    store_id: storeId || null
   });
 
   if (error) {

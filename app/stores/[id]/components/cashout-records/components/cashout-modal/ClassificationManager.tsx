@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState } from "react";
 import {
@@ -16,7 +16,7 @@ interface ClassificationManagerProps {
   onClose: () => void;
 }
 
-// Shared icon map â€” also used by OpexForm
+// Shared icon map — also used by OpexForm
 export const ICON_MAP: Record<string, React.ReactNode> = {
   Lightbulb: <Lightbulb size={18} />,
   Wifi: <Wifi size={18} />,
@@ -254,7 +254,7 @@ export const ClassificationManager = ({ storeId, isOpen, onClose }: Classificati
         </div>
 
         <div className="p-4 border-t border-border bg-muted/10 text-center">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Punch POS â€¢ Category Management</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Punch POS • Category Management</p>
         </div>
       </div>
     </div>

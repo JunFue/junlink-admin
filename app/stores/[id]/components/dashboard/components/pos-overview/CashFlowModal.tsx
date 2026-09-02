@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -87,7 +87,7 @@ export function CashFlowModal({ storeId, isOpen, onClose, isMultiDrawer = false 
         header: "Forwarded Balance",
         cell: (info) => (
           <div className="font-mono text-muted-foreground text-right">
-            â‚±
+            ₱
             {(info.getValue() as number).toLocaleString(undefined, {
               minimumFractionDigits: 2,
             })}
@@ -102,7 +102,7 @@ export function CashFlowModal({ storeId, isOpen, onClose, isMultiDrawer = false 
           return (
             <div className="font-mono text-emerald-500 text-right">
               {val > 0
-                ? `+â‚±${val.toLocaleString(undefined, {
+                ? `+₱${val.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                   })}`
                 : "-"}
@@ -118,7 +118,7 @@ export function CashFlowModal({ storeId, isOpen, onClose, isMultiDrawer = false 
           return (
             <div className="font-mono text-red-400 text-right">
               {val > 0
-                ? `-â‚±${val.toLocaleString(undefined, {
+                ? `-₱${val.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                   })}`
                 : "-"}
@@ -131,7 +131,7 @@ export function CashFlowModal({ storeId, isOpen, onClose, isMultiDrawer = false 
         header: "Balance",
         cell: (info) => (
           <div className="bg-muted/50 py-1 px-2 rounded font-mono font-bold text-foreground text-right">
-            â‚±
+            ₱
             {(info.getValue() as number).toLocaleString(undefined, {
               minimumFractionDigits: 2,
             })}
@@ -180,9 +180,9 @@ export function CashFlowModal({ storeId, isOpen, onClose, isMultiDrawer = false 
             <div className="flex items-center gap-2 mt-0.5">
               <p className="text-sm text-muted-foreground">
                 {startDate && endDate
-                  ? `${dayjs(startDate).format("MMM D")} â€“ ${dayjs(endDate).format("MMM D, YYYY")}`
+                  ? `${dayjs(startDate).format("MMM D")} – ${dayjs(endDate).format("MMM D, YYYY")}`
                   : "All time"}
-                {" Â· "}
+                {" · "}
                 <span className="font-medium text-foreground/80">
                   {activeCategory}
                 </span>
@@ -215,7 +215,7 @@ export function CashFlowModal({ storeId, isOpen, onClose, isMultiDrawer = false 
 
         {/* --- Filter Bar --- */}
         <div className="flex flex-wrap items-end gap-4 px-5 py-3 border-b border-border bg-muted/30 shrink-0">
-          {/* Category Dropdown â€” only in multi-drawer mode */}
+          {/* Category Dropdown — only in multi-drawer mode */}
           {isMultiDrawer && (
               <StandardSelect
                 value={activeCategory}
@@ -251,25 +251,25 @@ export function CashFlowModal({ storeId, isOpen, onClose, isMultiDrawer = false 
             <div className="bg-muted/40 rounded-lg p-2.5 text-center">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Opening</p>
               <p className="font-mono font-semibold text-foreground text-sm">
-                â‚±{totals.openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                ₱{totals.openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </p>
             </div>
             <div className="bg-emerald-500/10 rounded-lg p-2.5 text-center">
               <p className="text-[10px] uppercase tracking-wider text-emerald-400 mb-0.5">Total In</p>
               <p className="font-mono font-semibold text-emerald-500 text-sm">
-                +â‚±{totals.cashIn.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                +₱{totals.cashIn.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </p>
             </div>
             <div className="bg-red-500/10 rounded-lg p-2.5 text-center">
               <p className="text-[10px] uppercase tracking-wider text-red-400 mb-0.5">Total Out</p>
               <p className="font-mono font-semibold text-red-400 text-sm">
-                -â‚±{totals.cashOut.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                -₱{totals.cashOut.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </p>
             </div>
             <div className="bg-muted/40 rounded-lg p-2.5 text-center">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Balance</p>
               <p className="font-mono font-bold text-foreground text-sm">
-                â‚±{totals.endingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                ₱{totals.endingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </p>
             </div>
           </div>
@@ -344,7 +344,7 @@ export function CashFlowModal({ storeId, isOpen, onClose, isMultiDrawer = false 
         <div className="px-5 py-3 border-t border-border bg-muted/20 text-center shrink-0">
           <span className="text-xs text-muted-foreground">
             Showing <span className="font-medium text-foreground">{ledger.length}</span> entries
-            {" Â· "}
+            {" · "}
             Forwarded = previous day&apos;s ending balance
           </span>
         </div>

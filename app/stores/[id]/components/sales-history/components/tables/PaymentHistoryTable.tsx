@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useRef, useCallback } from "react";
 import { Loader2, AlertCircle, XCircle, Trash2, Search } from "lucide-react";
@@ -263,16 +263,16 @@ export const PaymentHistoryTable = ({ storeId }: { storeId: string }) => {
                     )}
                   </td>
                   <td className="px-6 py-4 font-bold text-right">
-                    â‚±{(pay.grandTotal ?? 0).toFixed(2)}
+                    ₱{(pay.grandTotal ?? 0).toFixed(2)}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    â‚±{(pay.amountRendered ?? 0).toFixed(2)}
+                    ₱{(pay.amountRendered ?? 0).toFixed(2)}
                   </td>
                   <td className="px-6 py-4 text-primary text-right">
-                    {pay.voucher > 0 ? `â‚±${(pay.voucher ?? 0).toFixed(2)}` : "-"}
+                    {pay.voucher > 0 ? `₱${(pay.voucher ?? 0).toFixed(2)}` : "-"}
                   </td>
                   <td className="px-6 py-4 font-bold text-green-500 text-right">
-                    â‚±{(pay.change ?? 0).toFixed(2)}
+                    ₱{(pay.change ?? 0).toFixed(2)}
                   </td>
                   {can_delete_transaction && (
                     <td className="px-6 py-4 text-right">

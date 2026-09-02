@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useRef, useCallback, useState } from "react";
 import { Loader2, AlertCircle, XCircle, Search } from "lucide-react";
@@ -162,9 +162,9 @@ export const TransactionHistoryTable = ({ storeId }: { storeId: string }) => {
                   <td className="px-6 py-4 text-muted-foreground text-xs">{item.transactionNo}</td>
                   <td className="px-6 py-4 text-muted-foreground text-xs">{item.barcode}</td>
                   <td className="px-6 py-4 font-medium text-foreground">{item.ItemName}</td>
-                  <td className="px-6 py-4 text-right">â‚±{(item.unitPrice ?? 0).toFixed(2)}</td>
+                  <td className="px-6 py-4 text-right">₱{(item.unitPrice ?? 0).toFixed(2)}</td>
                   <td className="px-6 py-4 text-right">{item.quantity}</td>
-                  <td className="px-6 py-4 font-bold text-primary text-right">â‚±{(item.totalPrice ?? 0).toFixed(2)}</td>
+                  <td className="px-6 py-4 font-bold text-primary text-right">₱{(item.totalPrice ?? 0).toFixed(2)}</td>
                 </tr>
               ))
             )}

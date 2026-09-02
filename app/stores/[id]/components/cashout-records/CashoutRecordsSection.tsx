@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, Suspense, useCallback, useMemo } from 'react';
 import { DollarSign, Filter, Wallet } from 'lucide-react';
@@ -189,7 +189,7 @@ function CashoutContent({ storeId }: { storeId: string }) {
                               {entry.category}
                             </span>
                             <span className="font-mono font-semibold text-foreground whitespace-nowrap">
-                              â‚±{entry.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              ₱{entry.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </span>
                           </div>
                         ))}

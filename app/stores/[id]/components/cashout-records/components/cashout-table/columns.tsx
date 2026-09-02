@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 import { StandardSelect } from "@/app/stores/[id]/components/shared/components/reusables/StandardSelect";
@@ -235,7 +235,7 @@ export const getColumns = (
       if (isEditing) {
         return (
           <div className="relative">
-             <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">â‚±</span>
+             <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₱</span>
              <input 
                name="amount"
                type="number"

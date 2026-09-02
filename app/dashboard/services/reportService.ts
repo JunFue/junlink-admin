@@ -46,12 +46,19 @@ export async function generatePDFReport(
       throw categoryError;
     }
 
-    // Aggregate the cash_in by category manually since we queried raw rows
+    // Aggregate the cash_in by category manually with case-insensitive grouping
     const categoryTotals: Record<string, number> = {};
     if (rawCategoryData) {
       rawCategoryData.forEach(row => {
-        const catName = row.category || 'Uncategorized';
-        categoryTotals[catName] = (categoryTotals[catName] || 0) + Number(row.cash_in || 0);
+        const rawCat = (row.category || '').trim() || 'Uncategorized';
+        let targetKey = rawCat;
+        for (const existingKey of Object.keys(categoryTotals)) {
+          if (existingKey.toLowerCase() === rawCat.toLowerCase()) {
+            targetKey = existingKey;
+            break;
+          }
+        }
+        categoryTotals[targetKey] = (categoryTotals[targetKey] || 0) + Number(row.cash_in || 0);
       });
     }
 
@@ -77,23 +84,43 @@ export async function generatePDFReport(
     let opexTotal = 0;
     let remittanceTotal = 0;
 
-    const cogsItems: [string, number][] = [];
-    const opexItems: [string, number][] = [];
-    const remittanceItems: [string, number][] = [];
+    const cogsItemsMap = new Map<string, number>();
+    const opexItemsMap = new Map<string, number>();
+    const remittanceItemsMap = new Map<string, number>();
+
+    // Helper to add/merge amounts case-insensitively while preserving clean typography
+    const aggregateCategory = (map: Map<string, number>, rawName: string | undefined | null, amount: number, defaultName: string) => {
+      const trimmed = (rawName || '').trim() || defaultName;
+      let targetKey = trimmed;
+      
+      // Look for case-insensitive match
+      for (const key of map.keys()) {
+        if (key.toLowerCase() === trimmed.toLowerCase()) {
+          targetKey = key;
+          break;
+        }
+      }
+
+      map.set(targetKey, (map.get(targetKey) || 0) + amount);
+    };
 
     cashouts.forEach(c => {
-      const amount = Number(c.total_amount);
+      const amount = Number(c.total_amount) || 0;
       if (c.cashout_type === 'COGS') {
         cogsTotal += amount;
-        cogsItems.push([c.subcategory || 'Uncategorized COGS', amount]);
+        aggregateCategory(cogsItemsMap, c.subcategory, amount, 'Uncategorized COGS');
       } else if (c.cashout_type === 'OPEX') {
         opexTotal += amount;
-        opexItems.push([c.subcategory || 'Uncategorized OPEX', amount]);
+        aggregateCategory(opexItemsMap, c.subcategory, amount, 'Uncategorized OPEX');
       } else if (c.cashout_type === 'REMITTANCE') {
         remittanceTotal += amount;
-        remittanceItems.push([c.subcategory || 'Uncategorized Remittance', amount]);
+        aggregateCategory(remittanceItemsMap, c.subcategory, amount, 'Uncategorized Remittance');
       }
     });
+
+    const cogsItems: [string, number][] = Array.from(cogsItemsMap.entries()).sort((a, b) => b[1] - a[1]);
+    const opexItems: [string, number][] = Array.from(opexItemsMap.entries()).sort((a, b) => b[1] - a[1]);
+    const remittanceItems: [string, number][] = Array.from(remittanceItemsMap.entries()).sort((a, b) => b[1] - a[1]);
 
     const grossProfit = netSales - cogsTotal;
     const netProfit = grossProfit - opexTotal;

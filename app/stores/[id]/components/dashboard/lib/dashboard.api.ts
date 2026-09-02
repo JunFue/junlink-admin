@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import dayjs from "dayjs";
@@ -62,7 +62,7 @@ export const fetchFinancialReport = async (
 ): Promise<FinancialReportItem[]> => {
   const supabase = await getSupabase();
   
-  // Sum up stats from daily_store_stats for the range
+  // Reads from daily_store_stats (pre-computed, kept in sync by DB trigger)
   const { data, error } = await supabase
     .from("daily_store_stats")
     .select("total_gross_sales, total_cashout, cash_remaining")
@@ -81,16 +81,11 @@ export const fetchFinancialReport = async (
     (acc, curr) => ({
       gross: acc.gross + (Number(curr.total_gross_sales) || 0),
       expenses: acc.expenses + (Number(curr.total_cashout) || 0),
-      // For cash on hand, we take the last day's cash_remaining in the range
-      // but for a summary, maybe we just want to show the current state or sum?
-      // Usually "Cash on Hand" in a period report is the ending balance.
-      // However, the original report might have been per category.
-      // Since daily_store_stats is overall, we return one "Overall" row.
     }),
     { gross: 0, expenses: 0 }
   );
 
-  // We need to handle cash_forwarded. It's the balance before the startDate.
+  // cash_forwarded = balance before the startDate
   const { data: previousData } = await supabase
     .from("overall_cash_flow")
     .select("balance")
@@ -132,7 +127,7 @@ export const fetchDashboardStats = async (
 ): Promise<any> => {
   const supabase = await getSupabase();
   
-  // 1. Fetch pre-calculated stats from daily_store_stats
+  // 1. Fetch pre-calculated stats from daily_store_stats (kept in sync by DB trigger)
   const { data: statsData, error: statsError } = await supabase
     .from("daily_store_stats")
     .select("*")
@@ -151,7 +146,7 @@ export const fetchDashboardStats = async (
     .select("balance")
     .eq("store_id", storeId)
     .lte("date", date)
-    .order("date", { ascending: false }) // Get the latest balance up to the selected date
+    .order("date", { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -163,7 +158,6 @@ export const fetchDashboardStats = async (
     return null;
   }
 
-  // Use the live balance if available, otherwise fallback to stats table
   const cashInDrawer = cashData ? Number(cashData.balance) : (statsData ? Number(statsData.cash_remaining) : 0);
 
   return {
@@ -267,7 +261,7 @@ export const fetchLatestCategorySales = async (
 
   if (!data || data.length === 0) return [];
 
-  // Deduplicate by category â€” keep the latest (first) row per category
+  // Deduplicate by category — keep the latest (first) row per category
   const seen = new Set<string>();
   const result: { category: string; cash_in: number; balance: number }[] = [];
   for (const row of data) {

@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Settings as SettingsIcon, Shield, FileText, UserCog } from 'lucide-react'
+import { Settings as SettingsIcon, Shield, FileText, UserCog, Tag } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
 const settingsNav = [
   { name: 'General', href: '/settings', icon: SettingsIcon },
   { name: 'Account Settings', href: '/settings/account', icon: UserCog },
+  { name: 'Expense Categories', href: '/settings/classifications', icon: Tag },
   { name: 'System Config', href: '/settings/system', icon: Shield },
   { name: 'Audit Logs', href: '/settings/audit', icon: FileText },
 ]
