@@ -234,6 +234,16 @@ export async function deleteClassification(
   supabase: SupabaseClient,
   id: string
 ): Promise<void> {
+  // Safe cleanup: Nullify any leftover expenses referencing this classification
+  const { error: cleanupError } = await supabase
+    .from('expenses')
+    .update({ classification_id: null })
+    .eq('classification_id', id);
+
+  if (cleanupError) {
+    console.warn('Could not nullify expense references before delete:', cleanupError);
+  }
+
   const { error } = await supabase
     .from('classification')
     .delete()

@@ -19,6 +19,16 @@ ALTER COLUMN store_id DROP NOT NULL;
 ALTER TABLE public.classification 
 ADD COLUMN IF NOT EXISTS icon text DEFAULT 'Store';
 
+-- Update foreign key constraint on expenses so deleting a category safely sets classification_id to NULL
+ALTER TABLE public.expenses
+DROP CONSTRAINT IF EXISTS expenses_classification_id_fkey;
+
+ALTER TABLE public.expenses
+ADD CONSTRAINT expenses_classification_id_fkey
+FOREIGN KEY (classification_id)
+REFERENCES public.classification(id)
+ON DELETE SET NULL;
+
 -- 2. Fast set-based backfill of admin_id from stores
 UPDATE public.classification c
 SET admin_id = s.user_id

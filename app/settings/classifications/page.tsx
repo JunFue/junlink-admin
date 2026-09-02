@@ -88,6 +88,7 @@ export default function ExpenseCategoriesPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState<CategoryWithUsage | null>(null)
   const [deletingCategory, setDeletingCategory] = useState<CategoryWithUsage | null>(null)
+  const [deleteOption, setDeleteOption] = useState<'transfer' | 'uncategorized'>('transfer')
   const [transferTargetId, setTransferTargetId] = useState('')
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false)
   const [mergeSourceId, setMergeSourceId] = useState('')
@@ -221,12 +222,19 @@ export default function ExpenseCategoriesPage() {
 
   const handleDeleteClick = (cat: CategoryWithUsage) => {
     setDeletingCategory(cat)
-    setTransferTargetId('')
+    const otherCategories = categories.filter((c) => c.id !== cat.id)
+    if (otherCategories.length > 0) {
+      setDeleteOption('transfer')
+      setTransferTargetId('')
+    } else {
+      setDeleteOption('uncategorized')
+      setTransferTargetId('')
+    }
   }
 
   const handleConfirmDelete = () => {
     if (!deletingCategory) return
-    if (deletingCategory.usage_count > 0) {
+    if (deletingCategory.usage_count > 0 && deleteOption === 'transfer') {
       if (!transferTargetId) {
         alert('Please select a replacement category to transfer existing expenses to.')
         return
@@ -592,37 +600,70 @@ export default function ExpenseCategoriesPage() {
               </div>
 
               {deletingCategory.usage_count > 0 ? (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div className="bg-amber-500/10 border border-amber-500/20 p-3.5 rounded-xl flex items-start gap-2.5 text-amber-600 dark:text-amber-400 text-xs leading-relaxed">
                     <AlertCircle size={18} className="shrink-0 mt-0.5" />
                     <div>
                       <strong>Category in Use:</strong> There are{' '}
                       <span className="font-bold">{deletingCategory.usage_count}</span> recorded{' '}
-                      {deletingCategory.usage_count === 1 ? 'expense' : 'expenses'} associated with
-                      this category. Please select a replacement category to transfer them before
-                      deleting.
+                      {deletingCategory.usage_count === 1 ? 'expense' : 'expenses'} linked to this category.
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
-                      Transfer transactions to:
-                    </label>
-                    <select
-                      value={transferTargetId}
-                      onChange={(e) => setTransferTargetId(e.target.value)}
-                      className="w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">Select replacement category...</option>
-                      {categories
-                        .filter((c) => c.id !== deletingCategory.id)
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
+                  {categories.filter((c) => c.id !== deletingCategory.id).length > 0 && (
+                    <div className="grid grid-cols-2 gap-2 bg-muted/20 p-1 rounded-xl border border-border">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteOption('transfer')}
+                        className={cn(
+                          'py-1.5 px-2 text-xs font-semibold rounded-lg transition-all',
+                          deleteOption === 'transfer'
+                            ? 'bg-card text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        Reassign Expenses
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteOption('uncategorized')}
+                        className={cn(
+                          'py-1.5 px-2 text-xs font-semibold rounded-lg transition-all',
+                          deleteOption === 'uncategorized'
+                            ? 'bg-card text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        Leave Uncategorized
+                      </button>
+                    </div>
+                  )}
+
+                  {deleteOption === 'transfer' && categories.filter((c) => c.id !== deletingCategory.id).length > 0 ? (
+                    <div>
+                      <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
+                        Transfer transactions to: <span className="text-destructive">*</span>
+                      </label>
+                      <select
+                        value={transferTargetId}
+                        onChange={(e) => setTransferTargetId(e.target.value)}
+                        className="w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">Select replacement category...</option>
+                        {categories
+                          .filter((c) => c.id !== deletingCategory.id)
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground bg-muted/10 p-3 rounded-xl border border-border">
+                      All {deletingCategory.usage_count} linked transactions will be preserved and classified as <strong>&quot;Uncategorized OPEX&quot;</strong>.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
@@ -645,14 +686,14 @@ export default function ExpenseCategoriesPage() {
                 disabled={
                   deleteMutation.isPending ||
                   transferMutation.isPending ||
-                  (deletingCategory.usage_count > 0 && !transferTargetId)
+                  (deletingCategory.usage_count > 0 && deleteOption === 'transfer' && !transferTargetId)
                 }
                 className="px-4 py-2 bg-destructive text-destructive-foreground rounded-xl text-sm font-medium hover:bg-destructive/90 transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <Trash2 size={16} />
                 {deleteMutation.isPending || transferMutation.isPending
                   ? 'Deleting...'
-                  : deletingCategory.usage_count > 0
+                  : deletingCategory.usage_count > 0 && deleteOption === 'transfer'
                   ? 'Transfer & Delete'
                   : 'Delete'}
               </button>
