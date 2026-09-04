@@ -8,7 +8,7 @@ import {
   Users, 
   Store, 
   Receipt, 
-  BarChart3, 
+  Sparkles, 
   Settings,
   ChevronLeft,
   ChevronRight
@@ -21,7 +21,7 @@ const navigation = [
   { name: 'Staff', href: '/staff', icon: Users },
   { name: 'Stores', href: '/stores', icon: Store },
   { name: 'Transactions', href: '/transaction', icon: Receipt },
-  { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+  { name: 'Jun Fue AI', href: '/junfue-ai', icon: Sparkles },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 

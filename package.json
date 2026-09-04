@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.89.0",
     "@tanstack/react-query": "^5.90.17",
@@ -24,7 +25,9 @@
     "react-dom": "19.2.3",
     "react-hook-form": "^7.70.0",
     "react-intersection-observer": "^10.0.2",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.6.0",
+    "remark-gfm": "^4.0.1",
     "sharp": "^0.34.5",
     "zod": "^4.3.5",
     "zustand": "^5.0.9"
