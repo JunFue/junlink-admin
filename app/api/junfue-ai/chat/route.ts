@@ -100,8 +100,8 @@ GUIDELINES:
 - Keep your tone sharp, professional, insightful, and confident like a top-tier retail CFO and business consultant.
 `
 
-    // Try models with fallback: gemini-2.5-flash -> gemini-1.5-flash
-    const modelCandidates = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+    // Use supported and active Gemini models with fallback
+    const modelCandidates = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-flash-latest', 'gemini-2.5-flash-lite']
     let lastError: any = null
 
     for (const modelName of modelCandidates) {
@@ -140,7 +140,7 @@ GUIDELINES:
 
           for (const call of calls) {
             const toolName = call.name
-            const toolArgs = call.args as Record<string, any>
+            const toolArgs = (call.args || {}) as Record<string, any>
 
             const toolResult = await executeJunfueTool(toolName, toolArgs, {
               supabase,
@@ -162,15 +162,15 @@ GUIDELINES:
             toolsUsed.push({ name: toolName, summary })
 
             functionResponses.push({
-              response: {
+              functionResponse: {
                 name: toolName,
-                content: toolResult,
+                response: toolResult,
               },
             })
           }
 
           // Pass tool results back to Gemini
-          chatResult = await chat.sendMessage(functionResponses as any)
+          chatResult = await chat.sendMessage(functionResponses)
           response = chatResult.response
         }
 
