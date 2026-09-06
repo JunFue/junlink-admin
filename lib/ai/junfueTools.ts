@@ -432,7 +432,7 @@ export async function executeJunfueTool(
         // Find dead stock (items in catalog with 0 sales)
         const { data: catalogItems } = await supabase
           .from('items')
-          .select('id, item_name, sku, sales_price, unit_cost, low_stock_threshold')
+          .select('id, item_name, sku, sales_price, low_stock_threshold')
           .in('store_id', targetStores)
 
         const soldItemNames = new Set(Object.keys(itemAgg).map((n) => n.toLowerCase()))
@@ -443,7 +443,6 @@ export async function executeJunfueTool(
             itemName: item.item_name,
             sku: item.sku,
             price: item.sales_price,
-            unitCost: item.unit_cost,
           }))
 
         return {
@@ -690,7 +689,6 @@ export async function executeJunfueTool(
             item_name,
             sku,
             sales_price,
-            unit_cost,
             low_stock_threshold,
             store_id,
             stores(store_name)
@@ -728,7 +726,6 @@ export async function executeJunfueTool(
             itemName: item.item_name,
             sku: item.sku,
             price: item.sales_price,
-            unitCost: item.unit_cost,
             estimatedStock,
             threshold,
             status,
